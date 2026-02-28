@@ -1,0 +1,1893 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JS Execution Context & Stack</title>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Syne:wght@400;700;800&display=swap" rel="stylesheet">
+    <style>
+         :root {
+            --bg: #0a0a0f;
+            --surface: #12121a;
+            --surface2: #1a1a28;
+            --border: #2a2a40;
+            --accent: #7c3aed;
+            --accent2: #06b6d4;
+            --accent3: #f59e0b;
+            --green: #10b981;
+            --red: #ef4444;
+            --text: #e2e8f0;
+            --muted: #64748b;
+            --gec: #7c3aed;
+            --fec: #06b6d4;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: 'Syne', sans-serif;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+        /* Grid background */
+        
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background-image: linear-gradient(rgba(124, 58, 237, 0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(124, 58, 237, 0.05) 1px, transparent 1px);
+            background-size: 40px 40px;
+            pointer-events: none;
+            z-index: 0;
+        }
+        
+        .container {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 40px 24px;
+            position: relative;
+            z-index: 1;
+        }
+        /* Hero */
+        
+        .hero {
+            text-align: center;
+            margin-bottom: 64px;
+        }
+        
+        .hero h1 {
+            font-size: clamp(2rem, 5vw, 3.5rem);
+            font-weight: 800;
+            line-height: 1.1;
+            background: linear-gradient(135deg, #fff 30%, #7c3aed);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 12px;
+        }
+        
+        .hero p {
+            color: var(--muted);
+            font-size: 1.1rem;
+        }
+        /* Section titles */
+        
+        .section-title {
+            font-size: 1.4rem;
+            font-weight: 700;
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .section-title span {
+            background: var(--accent);
+            color: white;
+            width: 28px;
+            height: 28px;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.85rem;
+            font-family: 'JetBrains Mono', monospace;
+        }
+        /* Cards */
+        
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            padding: 28px;
+            margin-bottom: 32px;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, var(--accent), var(--accent2));
+        }
+        /* Phase boxes */
+        
+        .phases {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-top: 16px;
+        }
+        
+        .phase {
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+        }
+        
+        .phase-title {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            font-weight: 700;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            margin-bottom: 12px;
+            color: var(--accent3);
+        }
+        
+        .phase-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+            margin-bottom: 8px;
+            font-size: 0.9rem;
+            color: var(--muted);
+        }
+        
+        .phase-item .dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--accent3);
+            flex-shrink: 0;
+            margin-top: 6px;
+        }
+        /* EC Component diagram */
+        
+        .ec-diagram {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin-top: 16px;
+        }
+        
+        .ec-box {
+            border-radius: 12px;
+            padding: 20px;
+            border: 2px solid;
+        }
+        
+        .ec-box.global {
+            border-color: var(--gec);
+            background: rgba(124, 58, 237, 0.08);
+        }
+        
+        .ec-box.func {
+            border-color: var(--fec);
+            background: rgba(6, 182, 212, 0.08);
+        }
+        
+        .ec-box-title {
+            font-size: 0.75rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 700;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            margin-bottom: 14px;
+        }
+        
+        .ec-box.global .ec-box-title {
+            color: var(--gec);
+        }
+        
+        .ec-box.func .ec-box-title {
+            color: var(--fec);
+        }
+        
+        .ec-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.85rem;
+            margin-bottom: 8px;
+            padding: 6px 10px;
+            background: rgba(255, 255, 255, 0.04);
+            border-radius: 6px;
+            font-family: 'JetBrains Mono', monospace;
+        }
+        
+        .ec-key {
+            color: var(--muted);
+        }
+        
+        .ec-val {
+            color: var(--text);
+        }
+        /* Code block */
+        
+        .code-block {
+            background: #0d0d1a;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+            line-height: 1.8;
+            overflow-x: auto;
+            margin: 12px 0;
+        }
+        
+        .kw {
+            color: #c084fc;
+        }
+        
+        .fn {
+            color: #60a5fa;
+        }
+        
+        .str {
+            color: #86efac;
+        }
+        
+        .num {
+            color: #fbbf24;
+        }
+        
+        .cm {
+            color: #475569;
+            font-style: italic;
+        }
+        
+        .line-num {
+            color: #334155;
+            margin-right: 16px;
+            user-select: none;
+        }
+        /* Stack visualizer */
+        
+        .stack-demo {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+            align-items: start;
+        }
+        
+        .stack-visual {
+            background: var(--surface2);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+            min-height: 300px;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            gap: 8px;
+            position: relative;
+        }
+        
+        .stack-label {
+            position: absolute;
+            top: 14px;
+            left: 16px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.7rem;
+            letter-spacing: 0.1em;
+            color: var(--muted);
+            text-transform: uppercase;
+        }
+        
+        .stack-item {
+            border-radius: 8px;
+            padding: 10px 14px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+            animation: slideIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px) scaleY(0.8);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0) scaleY(1);
+            }
+        }
+        
+        .stack-item.gec {
+            background: rgba(124, 58, 237, 0.2);
+            border: 1px solid rgba(124, 58, 237, 0.4);
+        }
+        
+        .stack-item.fec {
+            background: rgba(6, 182, 212, 0.2);
+            border: 1px solid rgba(6, 182, 212, 0.4);
+        }
+        
+        .stack-item.fec2 {
+            background: rgba(245, 158, 11, 0.2);
+            border: 1px solid rgba(245, 158, 11, 0.4);
+        }
+        
+        .stack-badge {
+            font-size: 0.65rem;
+            padding: 2px 7px;
+            border-radius: 100px;
+            font-weight: 700;
+        }
+        
+        .gec .stack-badge {
+            background: var(--gec);
+            color: white;
+        }
+        
+        .fec .stack-badge {
+            background: var(--fec);
+            color: #0a0a0f;
+        }
+        
+        .fec2 .stack-badge {
+            background: var(--accent3);
+            color: #0a0a0f;
+        }
+        /* Step controls */
+        
+        .steps-info {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        
+        .step-item {
+            padding: 12px 16px;
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            opacity: 0.5;
+        }
+        
+        .step-item.active {
+            opacity: 1;
+            border-color: var(--accent);
+            background: rgba(124, 58, 237, 0.1);
+        }
+        
+        .step-num {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.7rem;
+            color: var(--accent);
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+        
+        .step-desc {
+            color: var(--text);
+            line-height: 1.4;
+        }
+        
+        .step-hint {
+            color: var(--muted);
+            font-size: 0.75rem;
+            margin-top: 4px;
+        }
+        /* Controls */
+        
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        
+        .btn {
+            padding: 10px 20px;
+            border-radius: 8px;
+            border: none;
+            font-family: 'Syne', sans-serif;
+            font-weight: 700;
+            font-size: 0.85rem;
+            cursor: pointer;
+            transition: all 0.2s;
+            letter-spacing: 0.03em;
+        }
+        
+        .btn-primary {
+            background: var(--accent);
+            color: white;
+        }
+        
+        .btn-primary:hover {
+            background: #6d28d9;
+            transform: translateY(-1px);
+        }
+        
+        .btn-secondary {
+            background: var(--surface2);
+            color: var(--text);
+            border: 1px solid var(--border);
+        }
+        
+        .btn-secondary:hover {
+            border-color: var(--accent);
+        }
+        /* Concept pills */
+        
+        .pills {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 16px;
+        }
+        
+        .pill {
+            padding: 6px 14px;
+            border-radius: 100px;
+            font-size: 0.8rem;
+            font-weight: 700;
+            font-family: 'JetBrains Mono', monospace;
+        }
+        
+        .pill-purple {
+            background: rgba(124, 58, 237, 0.2);
+            color: #a78bfa;
+            border: 1px solid rgba(124, 58, 237, 0.3);
+        }
+        
+        .pill-cyan {
+            background: rgba(6, 182, 212, 0.2);
+            color: #67e8f9;
+            border: 1px solid rgba(6, 182, 212, 0.3);
+        }
+        
+        .pill-amber {
+            background: rgba(245, 158, 11, 0.2);
+            color: #fde68a;
+            border: 1px solid rgba(245, 158, 11, 0.3);
+        }
+        
+        .pill-green {
+            background: rgba(16, 185, 129, 0.2);
+            color: #6ee7b7;
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+        /* Info boxes */
+        
+        .info-box {
+            border-radius: 10px;
+            padding: 14px 18px;
+            margin-top: 14px;
+            font-size: 0.88rem;
+            line-height: 1.6;
+        }
+        
+        .info-box.purple {
+            background: rgba(124, 58, 237, 0.1);
+            border-left: 3px solid var(--gec);
+        }
+        
+        .info-box.cyan {
+            background: rgba(6, 182, 212, 0.1);
+            border-left: 3px solid var(--fec);
+        }
+        
+        .info-box.amber {
+            background: rgba(245, 158, 11, 0.1);
+            border-left: 3px solid var(--accent3);
+        }
+        
+        .info-box strong {
+            color: white;
+        }
+        /* Scope chain diagram */
+        
+        .scope-chain {
+            display: flex;
+            flex-direction: column;
+            gap: 0;
+            margin-top: 16px;
+        }
+        
+        .scope-level {
+            border: 1px solid;
+            border-radius: 12px;
+            padding: 16px 20px;
+            position: relative;
+            margin: 6px 0;
+        }
+        
+        .scope-level.l0 {
+            border-color: var(--gec);
+            background: rgba(124, 58, 237, 0.06);
+            margin: 0 60px;
+        }
+        
+        .scope-level.l1 {
+            border-color: var(--fec);
+            background: rgba(6, 182, 212, 0.06);
+            margin: 0 30px;
+        }
+        
+        .scope-level.l2 {
+            border-color: var(--accent3);
+            background: rgba(245, 158, 11, 0.06);
+            margin: 0;
+        }
+        
+        .scope-tag {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.7rem;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            margin-bottom: 8px;
+        }
+        
+        .l0 .scope-tag {
+            color: var(--gec);
+        }
+        
+        .l1 .scope-tag {
+            color: var(--fec);
+        }
+        
+        .l2 .scope-tag {
+            color: var(--accent3);
+        }
+        
+        .scope-vars {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        
+        .scope-var {
+            padding: 3px 10px;
+            border-radius: 5px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+        }
+        
+        .l0 .scope-var {
+            background: rgba(124, 58, 237, 0.25);
+            color: #c4b5fd;
+        }
+        
+        .l1 .scope-var {
+            background: rgba(6, 182, 212, 0.25);
+            color: #a5f3fc;
+        }
+        
+        .l2 .scope-var {
+            background: rgba(245, 158, 11, 0.25);
+            color: #fde68a;
+        }
+        
+        .arrow-down {
+            text-align: center;
+            color: var(--muted);
+            font-size: 1.2rem;
+            line-height: 1;
+            margin: 0 auto;
+            font-family: 'JetBrains Mono', monospace;
+        }
+        /* Hoisting table */
+        
+        .table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 16px;
+            font-size: 0.85rem;
+        }
+        
+        .table th,
+        .table td {
+            padding: 10px 14px;
+            text-align: left;
+            border: 1px solid var(--border);
+        }
+        
+        .table th {
+            background: var(--surface2);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.75rem;
+            color: var(--muted);
+            letter-spacing: 0.08em;
+        }
+        
+        .table tr:hover td {
+            background: rgba(255, 255, 255, 0.02);
+        }
+        
+        .yes {
+            color: var(--green);
+            font-weight: 700;
+        }
+        
+        .no {
+            color: var(--red);
+            font-weight: 700;
+        }
+        
+        .partial {
+            color: var(--accent3);
+            font-weight: 700;
+        }
+        
+        .tag {
+            display: inline-block;
+            padding: 1px 7px;
+            border-radius: 4px;
+            font-size: 0.75rem;
+            font-family: 'JetBrains Mono', monospace;
+        }
+        
+        .tag-purple {
+            background: rgba(124, 58, 237, 0.25);
+            color: #c4b5fd;
+        }
+        
+        .tag-cyan {
+            background: rgba(6, 182, 212, 0.25);
+            color: #a5f3fc;
+        }
+        
+        .tag-amber {
+            background: rgba(245, 158, 11, 0.25);
+            color: #fde68a;
+        }
+        
+        @media (max-width: 640px) {
+            .phases,
+            .ec-diagram,
+            .stack-demo {
+                grid-template-columns: 1fr;
+            }
+        }
+        
+        .divider {
+            height: 1px;
+            background: var(--border);
+            margin: 40px 0;
+        }
+        
+        p {
+            color: var(--muted);
+            line-height: 1.7;
+            margin-bottom: 12px;
+            font-size: 0.95rem;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+
+        <div class="hero">
+            <h1>JavaScript Execution Context<br>& The Call Stack</h1>
+            <p>A deep visual guide — understand how JS actually runs your code</p>
+        </div>
+
+        <!-- SECTION 1: What is EC -->
+        <div class="card">
+            <div class="section-title"><span>1</span> What is an Execution Context?</div>
+            <p>Every time JavaScript runs code, it needs an <strong>environment</strong>. That environment is called an <strong>Execution Context (EC)</strong>. Think of it as a "box" that wraps around code and holds everything needed to run it — variables,
+                functions, the value of <code style="color:#a78bfa">this</code>, and a reference to the outer scope.</p>
+            <p>There are <strong>3 types</strong> of execution contexts:</p>
+            <div class="pills">
+                <div class="pill pill-purple">🌍 Global EC</div>
+                <div class="pill pill-cyan">⚙️ Function EC</div>
+                <div class="pill pill-amber">🔬 Eval EC (rare)</div>
+            </div>
+            <div class="info-box purple" style="margin-top:20px;">
+                <strong>Global EC</strong> is created automatically when JS starts. There's always exactly one Global EC. In browsers, the global object is <code>window</code>; in Node.js it's <code>global</code>.
+            </div>
+            <div class="info-box cyan">
+                <strong>Function EC</strong> is created every time a function is <em>called</em> (not defined). A new one is born for each invocation — even recursive calls.
+            </div>
+        </div>
+
+        <!-- SECTION 2: Phases -->
+        <div class="card">
+            <div class="section-title"><span>2</span> Two Phases of Execution Context Creation</div>
+            <p>Every EC goes through <strong>two phases</strong> before code runs:</p>
+            <div class="phases">
+                <div class="phase">
+                    <div class="phase-title">Phase 1 — Creation (Memory)</div>
+                    <div class="phase-item">
+                        <div class="dot"></div><span>JS engine scans the code</span></div>
+                    <div class="phase-item">
+                        <div class="dot"></div><span><code style="color:#86efac">var</code> variables → hoisted as <code style="color:#fbbf24">undefined</code></span></div>
+                    <div class="phase-item">
+                        <div class="dot"></div><span>Function declarations → stored in memory fully</span></div>
+                    <div class="phase-item">
+                        <div class="dot"></div><span><code style="color:#86efac">let</code> / <code style="color:#86efac">const</code> → hoisted but stay in Temporal Dead Zone</span></div>
+                    <div class="phase-item">
+                        <div class="dot"></div><span><code style="color:#86efac">this</code> binding is determined</span></div>
+                    <div class="phase-item">
+                        <div class="dot"></div><span>Outer scope reference is set</span></div>
+                </div>
+                <div class="phase">
+                    <div class="phase-title">Phase 2 — Execution (Code runs)</div>
+                    <div class="phase-item">
+                        <div class="dot"></div><span>Code runs line by line</span></div>
+                    <div class="phase-item">
+                        <div class="dot"></div><span>Variables get their actual values assigned</span></div>
+                    <div class="phase-item">
+                        <div class="dot"></div><span>Functions are called → new ECs are created</span></div>
+                    <div class="phase-item">
+                        <div class="dot"></div><span>Results are computed</span></div>
+                    <div class="phase-item">
+                        <div class="dot"></div><span>When done, EC is popped off the call stack</span></div>
+                    <div class="phase-item">
+                        <div class="dot"></div><span>Memory is freed (via garbage collection)</span></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SECTION 3: Anatomy of an EC -->
+        <div class="card">
+            <div class="section-title"><span>3</span> Anatomy of an Execution Context</div>
+            <p>Each EC contains three key components:</p>
+            <div class="ec-diagram">
+                <div class="ec-box global">
+                    <div class="ec-box-title">🌍 Global Execution Context</div>
+                    <div class="ec-row"><span class="ec-key">Variable Env</span><span class="ec-val">{ x: 10, greet: fn }</span></div>
+                    <div class="ec-row"><span class="ec-key">Lexical Env</span><span class="ec-val">Same as Var Env</span></div>
+                    <div class="ec-row"><span class="ec-key">this binding</span><span class="ec-val">window / global</span></div>
+                    <div class="ec-row"><span class="ec-key">Outer scope</span><span class="ec-val">null</span></div>
+                </div>
+                <div class="ec-box func">
+                    <div class="ec-box-title">⚙️ Function Execution Context</div>
+                    <div class="ec-row"><span class="ec-key">Variable Env</span><span class="ec-val">{ name: "Alice", result: undefined }</span></div>
+                    <div class="ec-row"><span class="ec-key">Lexical Env</span><span class="ec-val">Includes outer scope</span></div>
+                    <div class="ec-row"><span class="ec-key">this binding</span><span class="ec-val">Depends on call site</span></div>
+                    <div class="ec-row"><span class="ec-key">Outer scope</span><span class="ec-val">→ Global EC</span></div>
+                </div>
+            </div>
+            <div class="info-box amber" style="margin-top: 20px;">
+                <strong>Lexical Environment</strong> = Variable Environment + reference to the outer (parent) EC. This is how the <strong>scope chain</strong> is built — JS follows outer references upward until it hits null.
+            </div>
+        </div>
+
+        <!-- SECTION 4: Call Stack Interactive -->
+        <div class="card">
+            <div class="section-title"><span>4</span> The Call Stack — Interactive Demo</div>
+            <p>The <strong>Call Stack</strong> is a LIFO (Last In, First Out) data structure that JS uses to track which EC is currently running. Step through the example below to see it in action.</p>
+
+            <div class="code-block">
+                <span class="line-num">1</span><span class="kw">function</span> <span class="fn">multiply</span>(a, b) {
+                <span class="line-num">2</span> <span class="kw">return</span> a * b;
+                <span class="line-num">3</span>}
+                <span class="line-num">4</span>
+                <span class="line-num">5</span><span class="kw">function</span> <span class="fn">square</span>(n) {
+                <span class="line-num">6</span> <span class="kw">return</span> <span class="fn">multiply</span>(n, n); <span class="cm">// calls multiply</span>
+                <span class="line-num">7</span>}
+                <span class="line-num">8</span>
+                <span class="line-num">9</span><span class="kw">var</span> result = <span class="fn">square</span>(<span class="num">4</span>); <span class="cm">// calls square</span>
+                <span class="line-num">10</span>console.<span class="fn">log</span>(result); <span class="cm">// 16</span>
+            </div>
+
+            <div class="controls">
+                <button class="btn btn-primary" onclick="nextStep()">▶ Next Step</button>
+                <button class="btn btn-secondary" onclick="resetDemo()">↺ Reset</button>
+            </div>
+
+            <div class="stack-demo">
+                <div class="stack-visual" id="stack">
+                    <div class="stack-label">CALL STACK</div>
+                    <div style="text-align:center; color: var(--muted); font-size:0.8rem; position:absolute; bottom: 20px; left: 0; right: 0;" id="empty-msg">Stack is empty — press Next Step</div>
+                </div>
+                <div class="steps-info" id="steps-info">
+                    <!-- steps rendered by JS -->
+                </div>
+            </div>
+        </div>
+
+        <!-- SECTION 5: Scope Chain -->
+        <div class="card">
+            <div class="section-title"><span>5</span> Scope Chain</div>
+            <p>When JS looks up a variable, it starts in the <strong>current EC</strong>. If not found, it moves to the <strong>outer EC</strong>, and continues up until it reaches the Global EC. If still not found — <code style="color:#f87171">ReferenceError</code>.</p>
+
+            <div class="code-block">
+                <span class="kw">var</span> globalVar = <span class="str">"I'm global"</span>;
+
+                <span class="kw">function</span> <span class="fn">outer</span>() {
+                <span class="kw">var</span> outerVar = <span class="str">"I'm in outer"</span>;
+
+                <span class="kw">function</span> <span class="fn">inner</span>() {
+                <span class="kw">var</span> innerVar = <span class="str">"I'm in inner"</span>; console.
+                <span class="fn">log</span>(globalVar); <span class="cm">// ✅ found via scope chain</span> console.
+                <span class="fn">log</span>(outerVar); <span class="cm">// ✅ found in outer scope</span> console.
+                <span class="fn">log</span>(innerVar); <span class="cm">// ✅ found locally</span> }
+                <span class="fn">inner</span>(); }
+                <span class="fn">outer</span>();
+            </div>
+
+            <div class="scope-chain">
+                <div class="scope-level l2">
+                    <div class="scope-tag">inner() — Innermost Scope</div>
+                    <div class="scope-vars">
+                        <span class="scope-var">innerVar = "I'm in inner"</span>
+                        <span class="scope-var">this → window</span>
+                    </div>
+                </div>
+                <div class="arrow-down">↓ look up outer scope</div>
+                <div class="scope-level l1">
+                    <div class="scope-tag">outer() — Middle Scope</div>
+                    <div class="scope-vars">
+                        <span class="scope-var">outerVar = "I'm in outer"</span>
+                        <span class="scope-var">inner = fn</span>
+                    </div>
+                </div>
+                <div class="arrow-down">↓ look up outer scope</div>
+                <div class="scope-level l0">
+                    <div class="scope-tag">Global Scope</div>
+                    <div class="scope-vars">
+                        <span class="scope-var">globalVar = "I'm global"</span>
+                        <span class="scope-var">outer = fn</span>
+                        <span class="scope-var">this → window</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="info-box purple" style="margin-top: 20px;">
+                <strong>Key rule:</strong> Scope chain is determined by where functions are <em>written</em> (lexical scope), NOT where they are called. This is the foundation of closures.
+            </div>
+        </div>
+
+        <!-- SECTION 6: Hoisting -->
+        <div class="card">
+            <div class="section-title"><span>6</span> Hoisting (Creation Phase Effect)</div>
+            <p>Because the Creation Phase scans all declarations before code runs, <strong>hoisting</strong> happens. This is why you can call a function before its definition in code.</p>
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Declaration</th>
+                        <th>Hoisted?</th>
+                        <th>Initial Value</th>
+                        <th>Usable before declaration?</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><span class="tag tag-purple">var x</span></td>
+                        <td class="yes">✅ YES</td>
+                        <td><code style="color:#fbbf24">undefined</code></td>
+                        <td class="partial">⚠️ Yes, but returns undefined</td>
+                    </tr>
+                    <tr>
+                        <td><span class="tag tag-cyan">let x</span></td>
+                        <td class="partial">⚠️ Hoisted (TDZ)</td>
+                        <td>Temporal Dead Zone</td>
+                        <td class="no">❌ ReferenceError</td>
+                    </tr>
+                    <tr>
+                        <td><span class="tag tag-cyan">const x</span></td>
+                        <td class="partial">⚠️ Hoisted (TDZ)</td>
+                        <td>Temporal Dead Zone</td>
+                        <td class="no">❌ ReferenceError</td>
+                    </tr>
+                    <tr>
+                        <td><span class="tag tag-amber">function foo(){}</span></td>
+                        <td class="yes">✅ YES</td>
+                        <td>Full function definition</td>
+                        <td class="yes">✅ Yes, fully callable</td>
+                    </tr>
+                    <tr>
+                        <td><span class="tag tag-amber">const foo = () => {}</span></td>
+                        <td class="no">❌ Only var part</td>
+                        <td><code style="color:#fbbf24">undefined</code></td>
+                        <td class="no">❌ Not as a function</td>
+                    </tr>
+                </tbody>
+            </table>
+
+            <div class="code-block" style="margin-top:16px;">
+                <span class="cm">// Hoisting in action</span> console.
+                <span class="fn">log</span>(foo()); <span class="cm">// ✅ "hello" — function hoisted fully</span> console.
+                <span class="fn">log</span>(x); <span class="cm">// ✅ undefined — var hoisted but value not yet assigned</span>
+                <span class="cm">// console.log(y);   // ❌ ReferenceError — let in TDZ</span>
+
+                <span class="kw">function</span> <span class="fn">foo</span>() { <span class="kw">return</span> <span class="str">"hello"</span>; }
+                <span class="kw">var</span> x = <span class="num">42</span>;
+                <span class="kw">let</span> y = <span class="num">99</span>;
+            </div>
+        </div>
+
+        <!-- SECTION 7: Stack Overflow -->
+        <div class="card">
+            <div class="section-title"><span>7</span> Stack Overflow</div>
+            <p>The call stack has a <strong>maximum size</strong>. If you create infinite recursion (a function calling itself with no exit), the stack fills up and JavaScript throws a <code style="color:#f87171">Maximum call stack size exceeded</code> error.</p>
+            <div class="code-block">
+                <span class="kw">function</span> <span class="fn">recurse</span>() {
+                <span class="kw">return</span> <span class="fn">recurse</span>(); <span class="cm">// no base case!</span> }
+                <span class="fn">recurse</span>(); <span class="cm">// ❌ Stack Overflow!</span>
+
+                <span class="cm">// Stack fills like this:</span>
+                <span class="cm">// [recurse, recurse, recurse, recurse... 10,000+ times] → BOOM</span>
+            </div>
+            <div class="info-box amber">
+                <strong>Fix:</strong> Always have a base case in recursive functions that stops the recursion. Or use iteration (loops) for deep recursion.
+            </div>
+        </div>
+
+        <!-- SECTION 8: The Event Loop -->
+        <div class="card">
+            <div class="section-title"><span>8</span> The Event Loop — How Async Works</div>
+            <p>JavaScript is <strong>single-threaded</strong> — it can only do one thing at a time on the call stack. But we can write async code (fetch, setTimeout, etc.) without blocking. How? The <strong>Event Loop</strong> coordinates three things:</p>
+
+            <div style="margin-top: 20px;">
+                <!-- Big architecture diagram -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; margin-bottom: 16px;">
+                    <div style="background: var(--surface2); border: 2px solid var(--gec); border-radius: 12px; padding: 18px; text-align:center;">
+                        <div style="font-family:'JetBrains Mono',monospace; font-size:0.7rem; color:var(--gec); font-weight:700; letter-spacing:0.1em; text-transform:uppercase; margin-bottom:10px;">📦 Call Stack</div>
+                        <div style="font-size:0.82rem; color:var(--muted); line-height:1.6;">Where synchronous code runs. Only one frame at a time. JS engine lives here.</div>
+                    </div>
+                    <div style="background: var(--surface2); border: 2px solid var(--fec); border-radius: 12px; padding: 18px; text-align:center;">
+                        <div style="font-family:'JetBrains Mono',monospace; font-size:0.7rem; color:var(--fec); font-weight:700; letter-spacing:0.1em; text-transform:uppercase; margin-bottom:10px;">🌐 Web APIs / Node APIs</div>
+                        <div style="font-size:0.82rem; color:var(--muted); line-height:1.6;">Browser/Node handles async work here (timers, fetch, DOM events). Runs outside JS engine.</div>
+                    </div>
+                    <div style="background: var(--surface2); border: 2px solid var(--accent3); border-radius: 12px; padding: 18px; text-align:center;">
+                        <div style="font-family:'JetBrains Mono',monospace; font-size:0.7rem; color:var(--accent3); font-weight:700; letter-spacing:0.1em; text-transform:uppercase; margin-bottom:10px;">📬 Task Queues</div>
+                        <div style="font-size:0.82rem; color:var(--muted); line-height:1.6;">Completed async callbacks wait here. Microtask Queue has priority over Macrotask Queue.</div>
+                    </div>
+                </div>
+
+                <!-- Event loop flow arrows -->
+                <div style="background: var(--surface2); border: 1px solid var(--border); border-radius: 12px; padding: 20px;">
+                    <div style="font-family:'JetBrains Mono',monospace; font-size:0.7rem; color:var(--muted); text-transform:uppercase; letter-spacing:0.1em; margin-bottom:14px;">Event Loop Cycle</div>
+                    <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                        <div style="padding:8px 14px; background:rgba(124,58,237,0.2); border:1px solid var(--gec); border-radius:8px; font-size:0.82rem; font-family:'JetBrains Mono',monospace;">① Run call stack</div>
+                        <div style="color:var(--muted); font-size:1.2rem;">→</div>
+                        <div style="padding:8px 14px; background:rgba(124,58,237,0.2); border:1px solid var(--gec); border-radius:8px; font-size:0.82rem; font-family:'JetBrains Mono',monospace;">② Stack empty?</div>
+                        <div style="color:var(--muted); font-size:1.2rem;">→</div>
+                        <div style="padding:8px 14px; background:rgba(16,185,129,0.15); border:1px solid var(--green); border-radius:8px; font-size:0.82rem; font-family:'JetBrains Mono',monospace;">③ Drain microtask queue</div>
+                        <div style="color:var(--muted); font-size:1.2rem;">→</div>
+                        <div style="padding:8px 14px; background:rgba(245,158,11,0.15); border:1px solid var(--accent3); border-radius:8px; font-size:0.82rem; font-family:'JetBrains Mono',monospace;">④ Pick 1 macrotask</div>
+                        <div style="color:var(--muted); font-size:1.2rem;">→</div>
+                        <div style="padding:8px 14px; background:rgba(124,58,237,0.15); border:1px solid rgba(124,58,237,0.4); border-radius:8px; font-size:0.82rem; font-family:'JetBrains Mono',monospace;">↩ back to ①</div>
+                    </div>
+                </div>
+            </div>
+
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-top:16px;">
+                <div class="info-box" style="background:rgba(16,185,129,0.1); border-left:3px solid var(--green);">
+                    <strong style="color:var(--green);">Microtask Queue</strong> (HIGH priority)<br>
+                    <span style="color:var(--muted); font-size:0.85rem;">Promise callbacks (<code>.then</code>, <code>.catch</code>), <code>await</code> continuations, <code>queueMicrotask()</code>. <strong>Entire queue is drained</strong> before the next macrotask runs.</span>
+                </div>
+                <div class="info-box amber">
+                    <strong>Macrotask Queue</strong> (NORMAL priority)<br>
+                    <span style="color:var(--muted); font-size:0.85rem;"><code>setTimeout</code>, <code>setInterval</code>, DOM events, <code>fetch</code> callbacks. Only <strong>one task per loop tick</strong> is pulled from here.</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- SECTION 9: async/await -->
+        <div class="card">
+            <div class="section-title"><span>9</span> async / await & Execution Context</div>
+            <p>An <code style="color:#a78bfa">async</code> function always returns a Promise. When it hits an <code style="color:#a78bfa">await</code>, something remarkable happens to the call stack — its EC is <strong>suspended and removed</strong> from
+                the stack while waiting, then <strong>resumed</strong> later.</p>
+
+            <div class="code-block">
+                <span class="kw">async function</span> <span class="fn">fetchData</span>() { console.
+                <span class="fn">log</span>(<span class="str">"1 — fetchData starts"</span>); <span class="cm">// sync, runs immediately</span>
+
+                <span class="kw">const</span> data = <span class="kw">await</span> <span class="fn">fetch</span>(<span class="str">"/api/data"</span>); <span class="cm">// ⏸ EC suspends here!</span> console.
+
+                <span class="fn">log</span>(<span class="str">"3 — got data"</span>, data); <span class="cm">// resumes after fetch resolves</span>
+                <span class="kw">return</span> data; } console.
+
+                <span class="fn">log</span>(<span class="str">"0 — before call"</span>);
+                <span class="fn">fetchData</span>(); console.
+                <span class="fn">log</span>(<span class="str">"2 — after call (sync continues!)"</span>);
+
+                <span class="cm">// Output order:</span>
+                <span class="cm">// 0 — before call</span>
+                <span class="cm">// 1 — fetchData starts</span>
+                <span class="cm">// 2 — after call (sync continues!)   ← this runs BEFORE the await resolves</span>
+                <span class="cm">// 3 — got data  ← runs later via microtask queue</span>
+            </div>
+
+            <!-- Step-by-step async EC lifecycle -->
+            <div style="margin-top: 20px;">
+                <div style="font-family:'JetBrains Mono',monospace; font-size:0.75rem; color:var(--muted); text-transform:uppercase; letter-spacing:0.1em; margin-bottom:14px;">async function EC Lifecycle</div>
+                <div style="display:flex; flex-direction:column; gap:0;">
+
+                    <div style="display:grid; grid-template-columns:auto 1fr; gap:0; align-items:stretch;">
+                        <!-- Timeline line -->
+                        <div style="display:flex; flex-direction:column; align-items:center; padding-right:16px;">
+                            <div style="width:12px; height:12px; border-radius:50%; background:var(--gec); flex-shrink:0;"></div>
+                            <div style="width:2px; flex:1; background:var(--border);"></div>
+                        </div>
+                        <div style="padding-bottom:18px;">
+                            <div style="font-size:0.78rem; font-family:'JetBrains Mono',monospace; color:var(--gec); font-weight:700; margin-bottom:4px;">CALL</div>
+                            <div style="font-size:0.88rem; color:var(--text);">fetchData() is called → new Function EC created → pushed onto call stack</div>
+                            <div style="margin-top:6px; display:flex; gap:6px; align-items:center;">
+                                <div style="padding:3px 10px; background:rgba(124,58,237,0.2); border:1px solid var(--gec); border-radius:5px; font-family:'JetBrains Mono',monospace; font-size:0.75rem;">Global EC</div>
+                                <div style="color:var(--muted);">+</div>
+                                <div style="padding:3px 10px; background:rgba(6,182,212,0.2); border:1px solid var(--fec); border-radius:5px; font-family:'JetBrains Mono',monospace; font-size:0.75rem;">fetchData EC</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="display:grid; grid-template-columns:auto 1fr; gap:0; align-items:stretch;">
+                        <div style="display:flex; flex-direction:column; align-items:center; padding-right:16px;">
+                            <div style="width:12px; height:12px; border-radius:50%; background:var(--accent3); flex-shrink:0;"></div>
+                            <div style="width:2px; flex:1; background:var(--border);"></div>
+                        </div>
+                        <div style="padding-bottom:18px;">
+                            <div style="font-size:0.78rem; font-family:'JetBrains Mono',monospace; color:var(--accent3); font-weight:700; margin-bottom:4px;">HIT await</div>
+                            <div style="font-size:0.88rem; color:var(--text);">fetch() is handed to the Web API. The async function's EC is <strong>suspended</strong> — its state (local vars, where it paused) is saved, and it's <strong>popped off the stack</strong>.</div>
+                            <div style="margin-top:6px; display:flex; gap:6px; align-items:center;">
+                                <div style="padding:3px 10px; background:rgba(124,58,237,0.2); border:1px solid var(--gec); border-radius:5px; font-family:'JetBrains Mono',monospace; font-size:0.75rem;">Global EC</div>
+                                <div style="color:var(--muted);">← only this remains!</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="display:grid; grid-template-columns:auto 1fr; gap:0; align-items:stretch;">
+                        <div style="display:flex; flex-direction:column; align-items:center; padding-right:16px;">
+                            <div style="width:12px; height:12px; border-radius:50%; background:var(--fec); flex-shrink:0;"></div>
+                            <div style="width:2px; flex:1; background:var(--border);"></div>
+                        </div>
+                        <div style="padding-bottom:18px;">
+                            <div style="font-size:0.78rem; font-family:'JetBrains Mono',monospace; color:var(--fec); font-weight:700; margin-bottom:4px;">SYNC CODE RUNS</div>
+                            <div style="font-size:0.88rem; color:var(--text);">While fetch waits, the rest of the synchronous code (line after fetchData() call) runs normally on the empty stack.</div>
+                        </div>
+                    </div>
+
+                    <div style="display:grid; grid-template-columns:auto 1fr; gap:0; align-items:stretch;">
+                        <div style="display:flex; flex-direction:column; align-items:center; padding-right:16px;">
+                            <div style="width:12px; height:12px; border-radius:50%; background:var(--green); flex-shrink:0;"></div>
+                            <div style="width:2px; flex:1; background:var(--border);"></div>
+                        </div>
+                        <div style="padding-bottom:18px;">
+                            <div style="font-size:0.78rem; font-family:'JetBrains Mono',monospace; color:var(--green); font-weight:700; margin-bottom:4px;">AWAIT RESOLVES</div>
+                            <div style="font-size:0.88rem; color:var(--text);">fetch() completes → a microtask is queued. Event loop sees stack is empty → drains microtask queue → <strong>fetchData EC is restored</strong> and pushed back onto stack with its saved state.</div>
+                            <div style="margin-top:6px; display:flex; gap:6px; align-items:center;">
+                                <div style="padding:3px 10px; background:rgba(124,58,237,0.2); border:1px solid var(--gec); border-radius:5px; font-family:'JetBrains Mono',monospace; font-size:0.75rem;">Global EC</div>
+                                <div style="color:var(--muted);">+</div>
+                                <div style="padding:3px 10px; background:rgba(6,182,212,0.2); border:1px solid var(--fec); border-radius:5px; font-family:'JetBrains Mono',monospace; font-size:0.75rem;">fetchData EC (resumed)</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div style="display:grid; grid-template-columns:auto 1fr; gap:0;">
+                        <div style="display:flex; flex-direction:column; align-items:center; padding-right:16px;">
+                            <div style="width:12px; height:12px; border-radius:50%; background:var(--red); flex-shrink:0;"></div>
+                        </div>
+                        <div>
+                            <div style="font-size:0.78rem; font-family:'JetBrains Mono',monospace; color:var(--red); font-weight:700; margin-bottom:4px;">FINISHES</div>
+                            <div style="font-size:0.88rem; color:var(--text);">Code after await runs → fetchData EC is destroyed → popped off stack. The returned Promise resolves.</div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+            <div class="info-box purple" style="margin-top:20px;">
+                <strong>Key insight:</strong> <code>await</code> doesn't block the thread. It's syntactic sugar over Promises — it pauses <em>only that function's EC</em> and frees the call stack for other work. This is the magic that lets JS handle thousands
+                of async operations without freezing.
+            </div>
+        </div>
+
+        <!-- SECTION 10: Execution Order Quiz -->
+        <div class="card">
+            <div class="section-title"><span>10</span> Microtask vs Macrotask — Execution Order</div>
+            <p>This is where most developers get tripped up. The queue priority determines output order. Study this pattern carefully:</p>
+
+            <div class="code-block">
+                console.<span class="fn">log</span>(<span class="str">"1 — script start"</span>); <span class="cm">// sync</span>
+
+                <span class="fn">setTimeout</span>(() => { console.
+                <span class="fn">log</span>(<span class="str">"5 — setTimeout"</span>); <span class="cm">// macrotask queue</span> }, <span class="num">0</span>); Promise.
+
+                <span class="fn">resolve</span>().<span class="fn">then</span>(() => { console.
+                <span class="fn">log</span>(<span class="str">"3 — promise .then"</span>); <span class="cm">// microtask queue</span> });
+
+                <span class="kw">async function</span> <span class="fn">run</span>() { console.
+                <span class="fn">log</span>(<span class="str">"2 — async fn starts"</span>); <span class="cm">// sync (before first await)</span>
+                <span class="kw">await</span> Promise.<span class="fn">resolve</span>(); console.
+                <span class="fn">log</span>(<span class="str">"4 — after await"</span>); <span class="cm">// microtask queue (continuation)</span> }
+
+                <span class="fn">run</span>(); console.
+                <span class="fn">log</span>(<span class="str">"at end of script"</span>); <span class="cm">// sync — runs BEFORE promises resolve</span>
+
+                <span class="cm">// Output: 1 → 2 → "at end of script" → 3 → 4 → 5</span>
+            </div>
+
+            <!-- Execution order visual -->
+            <div style="margin-top:20px;">
+                <div style="font-family:'JetBrains Mono',monospace; font-size:0.75rem; color:var(--muted); text-transform:uppercase; letter-spacing:0.1em; margin-bottom:12px;">Why this order?</div>
+                <div style="display:flex; flex-direction:column; gap:8px;">
+                    <div style="display:flex; gap:12px; align-items:center;">
+                        <div style="width:28px; height:28px; border-radius:50%; background:var(--gec); display:flex; align-items:center; justify-content:center; font-weight:700; font-size:0.85rem; flex-shrink:0;">1</div>
+                        <div style="font-size:0.88rem;">All <strong>synchronous code</strong> runs first — call stack must be fully drained. <span style="color:var(--muted);">"1", "2", "at end of script"</span></div>
+                    </div>
+                    <div style="width:2px; height:14px; background:var(--border); margin-left:13px;"></div>
+                    <div style="display:flex; gap:12px; align-items:center;">
+                        <div style="width:28px; height:28px; border-radius:50%; background:var(--green); display:flex; align-items:center; justify-content:center; font-weight:700; font-size:0.85rem; flex-shrink:0; color:#0a0a0f;">2</div>
+                        <div style="font-size:0.88rem;"><strong>Entire microtask queue</strong> is drained next — all Promises and await continuations. <span style="color:var(--muted);">"3", "4"</span></div>
+                    </div>
+                    <div style="width:2px; height:14px; background:var(--border); margin-left:13px;"></div>
+                    <div style="display:flex; gap:12px; align-items:center;">
+                        <div style="width:28px; height:28px; border-radius:50%; background:var(--accent3); display:flex; align-items:center; justify-content:center; font-weight:700; font-size:0.85rem; flex-shrink:0; color:#0a0a0f;">3</div>
+                        <div style="font-size:0.88rem;"><strong>One macrotask</strong> from the macrotask queue. setTimeout callback runs. <span style="color:var(--muted);">"5"</span></div>
+                    </div>
+                </div>
+            </div>
+
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-top:20px;">
+                <div>
+                    <div style="font-family:'JetBrains Mono',monospace; font-size:0.7rem; color:var(--green); font-weight:700; letter-spacing:0.1em; text-transform:uppercase; margin-bottom:8px;">✅ Microtasks</div>
+                    <div style="background:rgba(16,185,129,0.08); border:1px solid rgba(16,185,129,0.3); border-radius:8px; padding:12px; font-size:0.83rem; color:var(--muted); font-family:'JetBrains Mono',monospace; line-height:1.8;">
+                        Promise.then()<br> Promise.catch()
+                        <br> await (continuation)<br> queueMicrotask()
+                        <br> MutationObserver
+                    </div>
+                </div>
+                <div>
+                    <div style="font-family:'JetBrains Mono',monospace; font-size:0.7rem; color:var(--accent3); font-weight:700; letter-spacing:0.1em; text-transform:uppercase; margin-bottom:8px;">⏱ Macrotasks</div>
+                    <div style="background:rgba(245,158,11,0.08); border:1px solid rgba(245,158,11,0.3); border-radius:8px; padding:12px; font-size:0.83rem; color:var(--muted); font-family:'JetBrains Mono',monospace; line-height:1.8;">
+                        setTimeout()<br> setInterval()
+                        <br> setImmediate() [Node]<br> I/O callbacks<br> UI rendering / events
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SECTION 11: Lexical Environment Deep Dive -->
+        <div class="card">
+            <div class="section-title"><span>11</span> Lexical Environment — Deep Dive</div>
+            <p>The <strong>Lexical Environment</strong> is one of the most important (and most misunderstood) parts of an Execution Context. It has two components: an <strong>Environment Record</strong> (where variables live) and a <strong>reference to the outer Lexical Environment</strong>                (the scope chain link).</p>
+
+            <!-- Two components diagram -->
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-top:18px; margin-bottom:20px;">
+                <div style="background:var(--surface2); border:2px solid var(--fec); border-radius:12px; padding:20px;">
+                    <div style="font-family:'JetBrains Mono',monospace; font-size:0.7rem; color:var(--fec); font-weight:700; letter-spacing:0.1em; text-transform:uppercase; margin-bottom:12px;">📋 Environment Record</div>
+                    <p style="font-size:0.85rem; color:var(--muted); margin-bottom:10px;">Stores all the <strong>identifier bindings</strong> in the current scope — variables, function names, parameters.</p>
+                    <div style="display:flex; flex-direction:column; gap:6px;">
+                        <div style="background:rgba(6,182,212,0.1); border:1px solid rgba(6,182,212,0.3); border-radius:6px; padding:8px 12px; font-family:'JetBrains Mono',monospace; font-size:0.78rem;">
+                            <span style="color:var(--muted);">Declarative Record</span> → <span style="color:var(--fec);">let, const, var, fn params</span>
+                        </div>
+                        <div style="background:rgba(6,182,212,0.1); border:1px solid rgba(6,182,212,0.3); border-radius:6px; padding:8px 12px; font-family:'JetBrains Mono',monospace; font-size:0.78rem;">
+                            <span style="color:var(--muted);">Object Record</span> → <span style="color:var(--fec);">global vars bound to window</span>
+                        </div>
+                        <div style="background:rgba(6,182,212,0.1); border:1px solid rgba(6,182,212,0.3); border-radius:6px; padding:8px 12px; font-family:'JetBrains Mono',monospace; font-size:0.78rem;">
+                            <span style="color:var(--muted);">Module Record</span> → <span style="color:var(--fec);">ES module imports/exports</span>
+                        </div>
+                    </div>
+                </div>
+                <div style="background:var(--surface2); border:2px solid var(--gec); border-radius:12px; padding:20px;">
+                    <div style="font-family:'JetBrains Mono',monospace; font-size:0.7rem; color:var(--gec); font-weight:700; letter-spacing:0.1em; text-transform:uppercase; margin-bottom:12px;">🔗 Outer Reference</div>
+                    <p style="font-size:0.85rem; color:var(--muted); margin-bottom:10px;">A pointer to the <strong>parent Lexical Environment</strong>. This is what creates the scope chain. Set at function <em>definition</em> time, not call time.</p>
+                    <div style="background:rgba(124,58,237,0.1); border:1px solid rgba(124,58,237,0.3); border-radius:6px; padding:10px 12px; font-family:'JetBrains Mono',monospace; font-size:0.78rem; line-height:1.8;">
+                        inner.[[outer]] → outer EC<br> outer.[[outer]] → global EC<br> global.[[outer]] → <span style="color:var(--red);">null</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Variable vs Lexical env difference -->
+            <div style="background:var(--surface2); border:1px solid var(--border); border-radius:12px; padding:20px; margin-bottom:18px;">
+                <div style="font-family:'JetBrains Mono',monospace; font-size:0.75rem; color:var(--muted); text-transform:uppercase; letter-spacing:0.1em; margin-bottom:14px;">Variable Environment vs Lexical Environment</div>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px;">
+                    <div>
+                        <div style="font-family:'JetBrains Mono',monospace; font-size:0.72rem; color:var(--accent3); font-weight:700; margin-bottom:8px; text-transform:uppercase;">Variable Environment</div>
+                        <div style="font-size:0.85rem; color:var(--muted); line-height:1.7;">Tracks only <strong style="color:var(--text);">var</strong> declarations and function declarations. In older spec terms, this is the "var scope". Same as Lexical Env in most cases, but <code>var</code> in a block still lives here
+                            at function level.</div>
+                    </div>
+                    <div>
+                        <div style="font-family:'JetBrains Mono',monospace; font-size:0.72rem; color:var(--fec); font-weight:700; margin-bottom:8px; text-transform:uppercase;">Lexical Environment</div>
+                        <div style="font-size:0.85rem; color:var(--muted); line-height:1.7;">Tracks <strong style="color:var(--text);">all bindings</strong> including <code>let</code>, <code>const</code>, and block scopes. Each <code>{}</code> block creates its own Lexical Environment. This is why <code>let</code>/<code>const</code>                            are truly block-scoped.</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="code-block">
+                <span class="kw">function</span> <span class="fn">outer</span>() {
+                <span class="kw">var</span> x = <span class="num">1</span>; <span class="cm">// Variable Env of outer()</span>
+                <span class="kw">let</span> y = <span class="num">2</span>; <span class="cm">// Lexical Env of outer()</span>
+
+                <span class="kw">if</span> (<span class="kw">true</span>) {
+                <span class="kw">var</span> x = <span class="num">10</span>; <span class="cm">// SAME x — var ignores block scope, hoisted to function</span>
+                <span class="kw">let</span> y = <span class="num">20</span>; <span class="cm">// NEW y — let creates new Lexical Env for the block</span> console.
+                <span class="fn">log</span>(y); <span class="cm">// 20 — block's own y</span> } console.
+
+                <span class="fn">log</span>(x); <span class="cm">// 10 — var was mutated inside the block</span> console.
+                <span class="fn">log</span>(y); <span class="cm">// 2  — outer y untouched (different Lexical Env)</span> }
+            </div>
+
+            <!-- Lexical env as nested boxes -->
+            <div style="margin-top:20px;">
+                <div style="font-family:'JetBrains Mono',monospace; font-size:0.75rem; color:var(--muted); text-transform:uppercase; letter-spacing:0.1em; margin-bottom:12px;">Lexical Environments as Nested Boxes</div>
+                <!-- Global -->
+                <div style="border:2px solid var(--gec); border-radius:12px; padding:16px; background:rgba(124,58,237,0.05);">
+                    <div style="font-family:'JetBrains Mono',monospace; font-size:0.7rem; color:var(--gec); font-weight:700; margin-bottom:10px;">🌍 GLOBAL LEXICAL ENV · outer = null</div>
+                    <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px;">
+                        <span style="background:rgba(124,58,237,0.25); color:#c4b5fd; padding:3px 10px; border-radius:5px; font-family:'JetBrains Mono',monospace; font-size:0.78rem;">outer = fn</span>
+                    </div>
+                    <!-- outer() env -->
+                    <div style="border:2px solid var(--fec); border-radius:10px; padding:14px; background:rgba(6,182,212,0.05);">
+                        <div style="font-family:'JetBrains Mono',monospace; font-size:0.7rem; color:var(--fec); font-weight:700; margin-bottom:10px;">⚙️ outer() LEXICAL ENV · outer → Global</div>
+                        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:14px;">
+                            <span style="background:rgba(6,182,212,0.25); color:#a5f3fc; padding:3px 10px; border-radius:5px; font-family:'JetBrains Mono',monospace; font-size:0.78rem;">x = 10 <span style="opacity:0.6">(var)</span></span>
+                            <span style="background:rgba(6,182,212,0.25); color:#a5f3fc; padding:3px 10px; border-radius:5px; font-family:'JetBrains Mono',monospace; font-size:0.78rem;">y = 2 <span style="opacity:0.6">(let)</span></span>
+                        </div>
+                        <!-- if block env -->
+                        <div style="border:2px solid var(--accent3); border-radius:8px; padding:12px; background:rgba(245,158,11,0.05);">
+                            <div style="font-family:'JetBrains Mono',monospace; font-size:0.7rem; color:var(--accent3); font-weight:700; margin-bottom:8px;">📦 if{} BLOCK LEXICAL ENV · outer → outer()</div>
+                            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                                <span style="background:rgba(245,158,11,0.25); color:#fde68a; padding:3px 10px; border-radius:5px; font-family:'JetBrains Mono',monospace; font-size:0.78rem;">y = 20 <span style="opacity:0.6">(let — new binding!)</span></span>
+                                <span style="background:rgba(100,116,139,0.2); color:#94a3b8; padding:3px 10px; border-radius:5px; font-family:'JetBrains Mono',monospace; font-size:0.78rem; text-decoration:line-through;">x — NOT here (var hoists)</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="info-box cyan" style="margin-top:18px;">
+                <strong>Closures explained via Lexical Environment:</strong> When a function is created, it captures a reference to its current Lexical Environment. Even after the outer function returns, the inner function keeps that reference alive —
+                this is exactly what a <strong>closure</strong> is.
+            </div>
+
+            <div class="code-block" style="margin-top:14px;">
+                <span class="kw">function</span> <span class="fn">makeCounter</span>() {
+                <span class="kw">let</span> count = <span class="num">0</span>; <span class="cm">// lives in makeCounter's Lexical Env</span>
+
+                <span class="kw">return function</span> <span class="fn">increment</span>() { count++; <span class="cm">// accesses makeCounter's Lexical Env via closure</span>
+                <span class="kw">return</span> count; }; }
+
+                <span class="kw">const</span> counter = <span class="fn">makeCounter</span>();
+                <span class="cm">// makeCounter() has returned, but its Lexical Env is STILL ALIVE</span>
+                <span class="cm">// because increment() holds a reference to it</span> console.
+
+                <span class="fn">log</span>(<span class="fn">counter</span>()); <span class="cm">// 1</span> console.
+                <span class="fn">log</span>(<span class="fn">counter</span>()); <span class="cm">// 2</span> console.
+                <span class="fn">log</span>(<span class="fn">counter</span>()); <span class="cm">// 3</span>
+            </div>
+        </div>
+
+        <!-- SECTION 12: Event Loop Examples -->
+        <div class="card">
+            <div class="section-title"><span>12</span> Event Loop — 4 Detailed Examples</div>
+            <p>These examples build from simple to advanced. Each one has a prediction challenge — try to figure out the output before reading the answer.</p>
+
+            <!-- Example 1 -->
+            <div style="background:var(--surface2); border:1px solid var(--border); border-radius:12px; padding:20px; margin-bottom:18px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+                    <div style="font-family:'JetBrains Mono',monospace; font-size:0.75rem; color:var(--accent3); font-weight:700; text-transform:uppercase; letter-spacing:0.1em;">Example 1 — Basic Queue Order</div>
+                    <div style="font-size:0.72rem; color:var(--muted); font-family:'JetBrains Mono',monospace;">beginner</div>
+                </div>
+                <div class="code-block" style="margin:0 0 14px;">
+                    console.<span class="fn">log</span>(<span class="str">"A"</span>);
+
+                    <span class="fn">setTimeout</span>(() => console.<span class="fn">log</span>(<span class="str">"B"</span>), <span class="num">0</span>); Promise.
+
+                    <span class="fn">resolve</span>().<span class="fn">then</span>(() => console.<span class="fn">log</span>(<span class="str">"C"</span>)); console.
+
+                    <span class="fn">log</span>(<span class="str">"D"</span>);
+
+                    <span class="cm">// Output: A → D → C → B</span>
+                </div>
+                <div style="display:grid; grid-template-columns:repeat(4,1fr); gap:8px;">
+                    <div style="background:rgba(124,58,237,0.15); border:1px solid rgba(124,58,237,0.4); border-radius:8px; padding:10px; text-align:center; font-size:0.8rem;">
+                        <div style="font-family:'JetBrains Mono',monospace; font-size:1rem; font-weight:700; color:var(--gec); margin-bottom:4px;">"A"</div>
+                        <div style="color:var(--muted); font-size:0.72rem;">1st — sync</div>
+                    </div>
+                    <div style="background:rgba(124,58,237,0.15); border:1px solid rgba(124,58,237,0.4); border-radius:8px; padding:10px; text-align:center; font-size:0.8rem;">
+                        <div style="font-family:'JetBrains Mono',monospace; font-size:1rem; font-weight:700; color:var(--gec); margin-bottom:4px;">"D"</div>
+                        <div style="color:var(--muted); font-size:0.72rem;">2nd — sync</div>
+                    </div>
+                    <div style="background:rgba(16,185,129,0.15); border:1px solid rgba(16,185,129,0.4); border-radius:8px; padding:10px; text-align:center; font-size:0.8rem;">
+                        <div style="font-family:'JetBrains Mono',monospace; font-size:1rem; font-weight:700; color:var(--green); margin-bottom:4px;">"C"</div>
+                        <div style="color:var(--muted); font-size:0.72rem;">3rd — microtask</div>
+                    </div>
+                    <div style="background:rgba(245,158,11,0.15); border:1px solid rgba(245,158,11,0.4); border-radius:8px; padding:10px; text-align:center; font-size:0.8rem;">
+                        <div style="font-family:'JetBrains Mono',monospace; font-size:1rem; font-weight:700; color:var(--accent3); margin-bottom:4px;">"B"</div>
+                        <div style="color:var(--muted); font-size:0.72rem;">4th — macrotask</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Example 2 -->
+            <div style="background:var(--surface2); border:1px solid var(--border); border-radius:12px; padding:20px; margin-bottom:18px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+                    <div style="font-family:'JetBrains Mono',monospace; font-size:0.75rem; color:var(--accent3); font-weight:700; text-transform:uppercase; letter-spacing:0.1em;">Example 2 — Chained Promises</div>
+                    <div style="font-size:0.72rem; color:var(--muted); font-family:'JetBrains Mono',monospace;">intermediate</div>
+                </div>
+                <div class="code-block" style="margin:0 0 14px;">
+                    console.<span class="fn">log</span>(<span class="str">"start"</span>); Promise.
+
+                    <span class="fn">resolve</span>() .
+                    <span class="fn">then</span>(() => { console.
+                    <span class="fn">log</span>(<span class="str">"microtask 1"</span>);
+                    <span class="kw">return</span> Promise.<span class="fn">resolve</span>(); <span class="cm">// nested promise</span> }) .
+                    <span class="fn">then</span>(() => console.<span class="fn">log</span>(<span class="str">"microtask 2"</span>)); Promise.
+
+                    <span class="fn">resolve</span>().<span class="fn">then</span>(() => console.<span class="fn">log</span>(<span class="str">"microtask 3"</span>)); console.
+
+                    <span class="fn">log</span>(<span class="str">"end"</span>);
+
+                    <span class="cm">// Output: start → end → microtask 1 → microtask 3 → microtask 2</span>
+                    <span class="cm">// Why? "microtask 2" is queued AFTER microtask 1 resolves its nested promise</span>
+                </div>
+                <div class="info-box amber" style="margin:0;">
+                    <strong>Tricky part:</strong> Returning a <code>Promise.resolve()</code> inside a <code>.then()</code> adds an extra microtask "tick" before the next <code>.then()</code> can run. So <code>microtask 3</code> sneaks in before <code>microtask 2</code>.
+                </div>
+            </div>
+
+            <!-- Example 3 -->
+            <div style="background:var(--surface2); border:1px solid var(--border); border-radius:12px; padding:20px; margin-bottom:18px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+                    <div style="font-family:'JetBrains Mono',monospace; font-size:0.75rem; color:var(--accent3); font-weight:700; text-transform:uppercase; letter-spacing:0.1em;">Example 3 — setTimeout vs Promise Race</div>
+                    <div style="font-size:0.72rem; color:var(--muted); font-family:'JetBrains Mono',monospace;">intermediate</div>
+                </div>
+                <div class="code-block" style="margin:0 0 14px;">
+                    <span class="fn">setTimeout</span>(() => console.<span class="fn">log</span>(<span class="str">"timeout 1"</span>), <span class="num">0</span>); Promise.
+
+                    <span class="fn">resolve</span>() .
+                    <span class="fn">then</span>(() => { console.
+                    <span class="fn">log</span>(<span class="str">"promise 1"</span>);
+                    <span class="fn">setTimeout</span>(() => console.<span class="fn">log</span>(<span class="str">"timeout 2"</span>), <span class="num">0</span>); <span class="cm">// queues a NEW macrotask</span> }) .
+                    <span class="fn">then</span>(() => console.<span class="fn">log</span>(<span class="str">"promise 2"</span>));
+
+                    <span class="cm">// Output: promise 1 → promise 2 → timeout 1 → timeout 2</span>
+                    <span class="cm">// "timeout 2" runs LAST — it was added to macrotask queue</span>
+                    <span class="cm">// AFTER "timeout 1" was already sitting there</span>
+                </div>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:0;">
+                    <div style="background:rgba(16,185,129,0.08); border:1px solid rgba(16,185,129,0.3); border-radius:8px; padding:12px; font-size:0.82rem;">
+                        <div style="color:var(--green); font-weight:700; font-family:'JetBrains Mono',monospace; font-size:0.7rem; margin-bottom:6px; text-transform:uppercase;">Microtask Queue (runs first)</div>
+                        <div style="color:var(--muted);">① promise 1 runs → queues timeout 2 as macrotask<br>② promise 2 runs</div>
+                    </div>
+                    <div style="background:rgba(245,158,11,0.08); border:1px solid rgba(245,158,11,0.3); border-radius:8px; padding:12px; font-size:0.82rem;">
+                        <div style="color:var(--accent3); font-weight:700; font-family:'JetBrains Mono',monospace; font-size:0.7rem; margin-bottom:6px; text-transform:uppercase;">Macrotask Queue (runs after)</div>
+                        <div style="color:var(--muted);">① timeout 1 (was queued first)<br>② timeout 2 (was queued during microtask)</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Example 4 -->
+            <div style="background:var(--surface2); border:1px solid var(--border); border-radius:12px; padding:20px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+                    <div style="font-family:'JetBrains Mono',monospace; font-size:0.75rem; color:var(--accent3); font-weight:700; text-transform:uppercase; letter-spacing:0.1em;">Example 4 — Multiple awaits in sequence</div>
+                    <div style="font-size:0.72rem; color:var(--muted); font-family:'JetBrains Mono',monospace;">advanced</div>
+                </div>
+                <div class="code-block" style="margin:0 0 14px;">
+                    <span class="kw">async function</span> <span class="fn">taskA</span>() { console.
+                    <span class="fn">log</span>(<span class="str">"A1"</span>);
+                    <span class="kw">await</span> Promise.<span class="fn">resolve</span>(); <span class="cm">// suspends, queues A continuation as microtask</span> console.
+                    <span class="fn">log</span>(<span class="str">"A2"</span>);
+                    <span class="kw">await</span> Promise.<span class="fn">resolve</span>(); <span class="cm">// suspends again</span> console.
+                    <span class="fn">log</span>(<span class="str">"A3"</span>); }
+
+                    <span class="kw">async function</span> <span class="fn">taskB</span>() { console.
+                    <span class="fn">log</span>(<span class="str">"B1"</span>);
+                    <span class="kw">await</span> Promise.<span class="fn">resolve</span>(); console.
+                    <span class="fn">log</span>(<span class="str">"B2"</span>); }
+
+                    <span class="fn">taskA</span>();
+                    <span class="fn">taskB</span>();
+
+                    <span class="cm">// Output: A1 → B1 → A2 → B2 → A3</span>
+                    <span class="cm">// Each await yields control back. Tasks interleave!</span>
+                </div>
+                <div class="info-box purple" style="margin:0;">
+                    <strong>Key insight:</strong> Each <code>await</code> is a <em>yield point</em>. After A1 hits <code>await</code>, control passes to taskB which runs until its <code>await</code>. Then microtasks resolve in order: A2 → B2 → A3. Functions
+                    interleave around their await points — this is cooperative multitasking.
+                </div>
+            </div>
+        </div>
+
+        <!-- SECTION 13: Interactive Event Loop Simulator -->
+        <div class="card">
+            <div class="section-title"><span>13</span> Interactive Event Loop Simulator</div>
+            <p>Watch the Call Stack, Microtask Queue, and Macrotask Queue evolve in real time as this code executes. Step through each tick of the event loop.</p>
+
+            <div class="code-block" style="margin-bottom:20px;">
+                <span class="cm">// The code being simulated:</span> console.
+                <span class="fn">log</span>(<span class="str">"script start"</span>); <span class="cm">// ← sync</span>
+                <span class="fn">setTimeout</span>(<span class="fn">cb1</span>, <span class="num">0</span>); <span class="cm">// ← to macrotask queue</span> Promise.
+                <span class="fn">resolve</span>().<span class="fn">then</span>(<span class="fn">cb2</span>); <span class="cm">// ← to microtask queue</span> Promise.
+                <span class="fn">resolve</span>().<span class="fn">then</span>(<span class="fn">cb3</span>); <span class="cm">// ← to microtask queue</span> console.
+                <span class="fn">log</span>(<span class="str">"script end"</span>); <span class="cm">// ← sync</span>
+            </div>
+
+            <div style="display:flex; gap:10px; margin-bottom:20px;">
+                <button class="btn btn-primary" onclick="elNext()">▶ Next Tick</button>
+                <button class="btn btn-secondary" onclick="elReset()">↺ Reset</button>
+                <div id="el-tick" style="padding:10px 16px; background:var(--surface2); border:1px solid var(--border); border-radius:8px; font-family:'JetBrains Mono',monospace; font-size:0.8rem; color:var(--muted); display:flex; align-items:center;">Tick: <span id="el-tick-num" style="color:var(--text); margin-left:6px;">0</span></div>
+            </div>
+
+            <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:14px; margin-bottom:14px;">
+                <!-- Call Stack -->
+                <div style="background:var(--surface2); border:2px solid var(--gec); border-radius:12px; padding:16px; min-height:220px; display:flex; flex-direction:column; justify-content:flex-end; gap:6px; position:relative;">
+                    <div style="position:absolute; top:12px; left:14px; font-family:'JetBrains Mono',monospace; font-size:0.65rem; color:var(--gec); font-weight:700; text-transform:uppercase; letter-spacing:0.1em;">📦 Call Stack</div>
+                    <div id="el-stack" style="display:flex; flex-direction:column; justify-content:flex-end; gap:6px; flex:1; padding-top:30px;">
+                        <div style="text-align:center; color:var(--muted); font-size:0.75rem;" id="el-stack-empty">empty</div>
+                    </div>
+                </div>
+                <!-- Microtask Queue -->
+                <div style="background:var(--surface2); border:2px solid var(--green); border-radius:12px; padding:16px; min-height:220px; display:flex; flex-direction:column; gap:6px; position:relative;">
+                    <div style="position:absolute; top:12px; left:14px; font-family:'JetBrains Mono',monospace; font-size:0.65rem; color:var(--green); font-weight:700; text-transform:uppercase; letter-spacing:0.1em;">⚡ Microtask Queue</div>
+                    <div id="el-micro" style="display:flex; flex-direction:column; gap:6px; flex:1; padding-top:30px;">
+                        <div style="text-align:center; color:var(--muted); font-size:0.75rem;" id="el-micro-empty">empty</div>
+                    </div>
+                </div>
+                <!-- Macrotask Queue -->
+                <div style="background:var(--surface2); border:2px solid var(--accent3); border-radius:12px; padding:16px; min-height:220px; display:flex; flex-direction:column; gap:6px; position:relative;">
+                    <div style="position:absolute; top:12px; left:14px; font-family:'JetBrains Mono',monospace; font-size:0.65rem; color:var(--accent3); font-weight:700; text-transform:uppercase; letter-spacing:0.1em;">⏱ Macrotask Queue</div>
+                    <div id="el-macro" style="display:flex; flex-direction:column; gap:6px; flex:1; padding-top:30px;">
+                        <div style="text-align:center; color:var(--muted); font-size:0.75rem;" id="el-macro-empty">empty</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Console output and explanation -->
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px;">
+                <div style="background:var(--surface2); border:1px solid var(--border); border-radius:12px; padding:16px;">
+                    <div style="font-family:'JetBrains Mono',monospace; font-size:0.65rem; color:var(--muted); font-weight:700; text-transform:uppercase; letter-spacing:0.1em; margin-bottom:10px;">🖥 Console Output</div>
+                    <div id="el-console" style="font-family:'JetBrains Mono',monospace; font-size:0.82rem; color:var(--green); min-height:80px; line-height:1.8;"></div>
+                </div>
+                <div style="background:var(--surface2); border:1px solid var(--border); border-radius:12px; padding:16px;">
+                    <div style="font-family:'JetBrains Mono',monospace; font-size:0.65rem; color:var(--muted); font-weight:700; text-transform:uppercase; letter-spacing:0.1em; margin-bottom:10px;">💡 What's happening</div>
+                    <div id="el-explain" style="font-size:0.84rem; color:var(--muted); line-height:1.6;">Press "Next Tick" to start the simulation.</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SECTION 14: Common Pitfalls -->
+        <div class="card">
+            <div class="section-title"><span>14</span> Common Pitfalls & How to Avoid Them</div>
+
+            <!-- Pitfall 1: async in loops -->
+            <div style="background:var(--surface2); border:1px solid var(--border); border-radius:12px; padding:20px; margin-bottom:16px;">
+                <div style="font-family:'JetBrains Mono',monospace; font-size:0.75rem; color:var(--red); font-weight:700; text-transform:uppercase; letter-spacing:0.1em; margin-bottom:12px;">⚠️ Pitfall 1: await inside forEach</div>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px;">
+                    <div>
+                        <div style="font-family:'JetBrains Mono',monospace; font-size:0.7rem; color:var(--red); margin-bottom:6px;">❌ Broken</div>
+                        <div class="code-block" style="margin:0; font-size:0.8rem;">
+                            <span class="kw">const</span> ids = [<span class="num">1</span>, <span class="num">2</span>, <span class="num">3</span>]; ids.
+                            <span class="fn">forEach</span>(<span class="kw">async</span> (id) => {
+                            <span class="kw">const</span> data = <span class="kw">await</span> <span class="fn">fetchUser</span>(id); console.
+                            <span class="fn">log</span>(data); <span class="cm">// order not guaranteed!</span> });
+                            <span class="cm">// forEach doesn't await — all 3</span>
+                            <span class="cm">// fetches fire simultaneously</span>
+                        </div>
+                    </div>
+                    <div>
+                        <div style="font-family:'JetBrains Mono',monospace; font-size:0.7rem; color:var(--green); margin-bottom:6px;">✅ Fixed — sequential</div>
+                        <div class="code-block" style="margin:0; font-size:0.8rem;">
+                            <span class="kw">for</span> (<span class="kw">const</span> id <span class="kw">of</span> ids) {
+                            <span class="kw">const</span> data = <span class="kw">await</span> <span class="fn">fetchUser</span>(id); console.
+                            <span class="fn">log</span>(data); <span class="cm">// guaranteed order</span> }
+                            <span class="cm">// Or parallel — if order doesn't matter:</span>
+                            <span class="kw">await</span> Promise.<span class="fn">all</span>(ids.<span class="fn">map</span>(<span class="fn">fetchUser</span>));
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Pitfall 2: unhandled rejection -->
+            <div style="background:var(--surface2); border:1px solid var(--border); border-radius:12px; padding:20px; margin-bottom:16px;">
+                <div style="font-family:'JetBrains Mono',monospace; font-size:0.75rem; color:var(--red); font-weight:700; text-transform:uppercase; letter-spacing:0.1em; margin-bottom:12px;">⚠️ Pitfall 2: Unhandled Promise Rejection</div>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px;">
+                    <div>
+                        <div style="font-family:'JetBrains Mono',monospace; font-size:0.7rem; color:var(--red); margin-bottom:6px;">❌ Silent failure</div>
+                        <div class="code-block" style="margin:0; font-size:0.8rem;">
+                            <span class="kw">async function</span> <span class="fn">load</span>() {
+                            <span class="kw">const</span> data = <span class="kw">await</span> <span class="fn">badFetch</span>();
+                            <span class="cm">// if badFetch() rejects,</span>
+                            <span class="cm">// the error disappears!</span> }
+                            <span class="fn">load</span>(); <span class="cm">// no .catch(), no try/catch</span>
+                        </div>
+                    </div>
+                    <div>
+                        <div style="font-family:'JetBrains Mono',monospace; font-size:0.7rem; color:var(--green); margin-bottom:6px;">✅ Proper handling</div>
+                        <div class="code-block" style="margin:0; font-size:0.8rem;">
+                            <span class="kw">async function</span> <span class="fn">load</span>() {
+                            <span class="kw">try</span> {
+                            <span class="kw">const</span> data = <span class="kw">await</span> <span class="fn">badFetch</span>(); } <span class="kw">catch</span> (err) { console.
+                            <span class="fn">error</span>(<span class="str">"Failed:"</span>, err); } }
+                            <span class="fn">load</span>();
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Pitfall 3: sequential vs parallel -->
+            <div style="background:var(--surface2); border:1px solid var(--border); border-radius:12px; padding:20px;">
+                <div style="font-family:'JetBrains Mono',monospace; font-size:0.75rem; color:var(--red); font-weight:700; text-transform:uppercase; letter-spacing:0.1em; margin-bottom:12px;">⚠️ Pitfall 3: Unnecessary Sequential Awaits (slow!)</div>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:14px;">
+                    <div>
+                        <div style="font-family:'JetBrains Mono',monospace; font-size:0.7rem; color:var(--red); margin-bottom:6px;">❌ Sequential — takes 2000ms</div>
+                        <div class="code-block" style="margin:0; font-size:0.8rem;">
+                            <span class="kw">const</span> a = <span class="kw">await</span> <span class="fn">fetch</span>(<span class="str">"/a"</span>); <span class="cm">// 1000ms</span>
+                            <span class="kw">const</span> b = <span class="kw">await</span> <span class="fn">fetch</span>(<span class="str">"/b"</span>); <span class="cm">// 1000ms</span>
+                            <span class="cm">// total: 2000ms — b waits for a!</span>
+                        </div>
+                    </div>
+                    <div>
+                        <div style="font-family:'JetBrains Mono',monospace; font-size:0.7rem; color:var(--green); margin-bottom:6px;">✅ Parallel — takes ~1000ms</div>
+                        <div class="code-block" style="margin:0; font-size:0.8rem;">
+                            <span class="kw">const</span> [a, b] = <span class="kw">await</span> Promise.<span class="fn">all</span>([
+                            <span class="fn">fetch</span>(<span class="str">"/a"</span>), <span class="cm">// fires immediately</span>
+                            <span class="fn">fetch</span>(<span class="str">"/b"</span>), <span class="cm">// fires immediately</span> ]);
+                            <span class="cm">// total: ~1000ms — run in parallel!</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SECTION 15: Summary -->
+        <div class="card">
+            <div class="section-title"><span>15</span> Summary — Complete Mental Model</div>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 8px;">
+                <div class="info-box purple">
+                    <strong>Execution Context</strong><br>An environment box for running code. Contains: Variable Env, Lexical Env, and <code>this</code>.
+                </div>
+                <div class="info-box cyan">
+                    <strong>2 Phases</strong><br>Creation (hoisting, memory allocation) then Execution (code runs line by line).
+                </div>
+                <div class="info-box amber">
+                    <strong>Call Stack</strong><br>LIFO stack tracking which EC is active. Global EC always at bottom, function ECs stacked on top.
+                </div>
+                <div class="info-box purple" style="border-color: var(--green);">
+                    <strong>Lexical Environment</strong><br>Environment Record (variables) + outer reference (scope chain). Each block creates its own. Foundation of closures.
+                </div>
+                <div class="info-box" style="background:rgba(16,185,129,0.1); border-left:3px solid var(--green);">
+                    <strong>Microtasks</strong> (Promise.then, await continuations)<br><span style="color:var(--muted);">Run after every sync task, before any macrotask. Entire queue is drained before moving on.</span>
+                </div>
+                <div class="info-box amber">
+                    <strong>Macrotasks</strong> (setTimeout, setInterval)<br><span style="color:var(--muted);">One per event loop tick. Always run after microtasks are fully drained.</span>
+                </div>
+                <div class="info-box" style="background:rgba(16,185,129,0.1); border-left:3px solid var(--fec); grid-column: 1 / -1;">
+                    <strong>async/await + Event Loop</strong><br>
+                    <span style="color:var(--muted);">JS is single-threaded. <code>await</code> suspends the function's EC (saves its state, pops off stack), freeing the thread for other work. When the awaited value resolves, the EC is restored via the microtask queue. Multiple async functions interleave at their <code>await</code> points — cooperative multitasking without threads.</span>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        const steps = [{
+            label: "STEP 1",
+            desc: "Global EC is created and pushed onto the stack. JS starts executing the file.",
+            hint: "var declarations are hoisted, function declarations stored",
+            stack: [{
+                label: "Global EC",
+                type: "gec",
+                badge: "GEC"
+            }]
+        }, {
+            label: "STEP 2",
+            desc: "square(4) is called on line 9. A new Function EC for square() is created and pushed.",
+            hint: "square's EC gets its own Variable Env with n = 4",
+            stack: [{
+                label: "Global EC",
+                type: "gec",
+                badge: "GEC"
+            }, {
+                label: "square(4)",
+                type: "fec",
+                badge: "FEC"
+            }]
+        }, {
+            label: "STEP 3",
+            desc: "Inside square(), multiply(n,n) is called. A new EC for multiply() is pushed on top.",
+            hint: "multiply's EC has a = 4, b = 4",
+            stack: [{
+                label: "Global EC",
+                type: "gec",
+                badge: "GEC"
+            }, {
+                label: "square(4)",
+                type: "fec",
+                badge: "FEC"
+            }, {
+                label: "multiply(4, 4)",
+                type: "fec2",
+                badge: "FEC"
+            }]
+        }, {
+            label: "STEP 4",
+            desc: "multiply() finishes (returns 16). Its EC is popped off the stack. Control returns to square().",
+            hint: "Memory for multiply's EC is freed",
+            stack: [{
+                label: "Global EC",
+                type: "gec",
+                badge: "GEC"
+            }, {
+                label: "square(4)",
+                type: "fec",
+                badge: "FEC"
+            }]
+        }, {
+            label: "STEP 5",
+            desc: "square() finishes (returns 16). Its EC is popped. result = 16 is set in Global EC.",
+            hint: "Back in Global EC, result is now 16",
+            stack: [{
+                label: "Global EC",
+                type: "gec",
+                badge: "GEC"
+            }]
+        }, {
+            label: "STEP 6",
+            desc: "console.log(result) runs and prints 16. When the script finishes, Global EC is also removed.",
+            hint: "Program complete — stack empty",
+            stack: []
+        }];
+
+        let currentStep = -1;
+
+        function renderStack(items) {
+            const stackEl = document.getElementById('stack');
+            const emptyMsg = document.getElementById('empty-msg');
+            const existingItems = stackEl.querySelectorAll('.stack-item');
+            existingItems.forEach(e => e.remove());
+
+            if (items.length === 0) {
+                emptyMsg.style.display = 'block';
+                emptyMsg.textContent = '✅ Stack is empty — program complete!';
+                emptyMsg.style.color = 'var(--green)';
+            } else {
+                emptyMsg.style.display = 'none';
+                items.forEach(item => {
+                    const el = document.createElement('div');
+                    el.className = `stack-item ${item.type}`;
+                    el.innerHTML = `<span>${item.label}</span><span class="stack-badge">${item.badge}</span>`;
+                    stackEl.appendChild(el);
+                });
+            }
+        }
+
+        function renderSteps() {
+            const container = document.getElementById('steps-info');
+            container.innerHTML = steps.map((s, i) => `
+    <div class="step-item ${i === currentStep ? 'active' : ''}" onclick="goToStep(${i})">
+      <div class="step-num">${s.label}</div>
+      <div class="step-desc">${s.desc}</div>
+      ${i === currentStep ? `<div class="step-hint">💡 ${s.hint}</div>` : ''}
+    </div>
+  `).join('');
+}
+
+function nextStep() {
+  if (currentStep < steps.length - 1) {
+    currentStep++;
+    renderStack(steps[currentStep].stack);
+    renderSteps();
+  }
+}
+
+function goToStep(i) {
+  currentStep = i;
+  renderStack(steps[currentStep].stack);
+  renderSteps();
+}
+
+function resetDemo() {
+  currentStep = -1;
+  const stackEl = document.getElementById('stack');
+  stackEl.querySelectorAll('.stack-item').forEach(e => e.remove());
+  const emptyMsg = document.getElementById('empty-msg');
+  emptyMsg.style.display = 'block';
+  emptyMsg.textContent = 'Stack is empty — press Next Step';
+  emptyMsg.style.color = 'var(--muted)';
+  renderSteps();
+}
+
+renderSteps();
+
+// ─── Event Loop Simulator ───────────────────────────────────────────────
+const elStates = [
+  {
+    tick: 0,
+    stack: [],
+    micro: [],
+    macro: [],
+    console: [],
+    explain: "Press \"Next Tick\" to start. We have a script to execute."
+  },
+  {
+    tick: 1,
+    stack: ["Global EC", "console.log(\"script start\")"],
+    micro: [],
+    macro: [],
+    console: ["script start"],
+    explain: "Sync: console.log(\"script start\") runs immediately on the call stack."
+  },
+  {
+    tick: 2,
+    stack: ["Global EC", "setTimeout(cb1, 0)"],
+    micro: [],
+    macro: ["cb1"],
+    console: ["script start"],
+    explain: "setTimeout(cb1, 0) is called. The browser's timer API handles it. When the timer fires (immediately at 0ms), cb1 is placed in the Macrotask Queue — NOT directly on the stack."
+  },
+  {
+    tick: 3,
+    stack: ["Global EC", "Promise.resolve().then(cb2)"],
+    micro: ["cb2"],
+    macro: ["cb1"],
+    console: ["script start"],
+    explain: "Promise.resolve() is already resolved, so cb2 is immediately queued into the Microtask Queue. Note: it doesn't run yet — sync code is still running."
+  },
+  {
+    tick: 4,
+    stack: ["Global EC", "Promise.resolve().then(cb3)"],
+    micro: ["cb2", "cb3"],
+    macro: ["cb1"],
+    console: ["script start"],
+    explain: "Same for cb3 — it's queued into the Microtask Queue behind cb2. Still waiting for sync code to finish."
+  },
+  {
+    tick: 5,
+    stack: ["Global EC", "console.log(\"script end\")"],
+    micro: ["cb2", "cb3"],
+    macro: ["cb1"],
+    console: ["script start", "script end"],
+    explain: "Sync: console.log(\"script end\") runs. This is the last synchronous line in the script."
+  },
+  {
+    tick: 6,
+    stack: ["Global EC"],
+    micro: ["cb2", "cb3"],
+    macro: ["cb1"],
+    console: ["script start", "script end"],
+    explain: "Sync code is done! The call stack is now only the Global EC. Event Loop checks: are there microtasks? YES — cb2 and cb3 are waiting. Microtasks run BEFORE any macrotask."
+  },
+  {
+    tick: 7,
+    stack: ["Global EC", "cb2 (microtask)"],
+    micro: ["cb3"],
+    macro: ["cb1"],
+    console: ["script start", "script end", "✓ cb2 ran"],
+    explain: "cb2 is pulled from the Microtask Queue and pushed onto the call stack. It runs (imagine it logs something). Microtask queue still has cb3."
+  },
+  {
+    tick: 8,
+    stack: ["Global EC", "cb3 (microtask)"],
+    micro: [],
+    macro: ["cb1"],
+    console: ["script start", "script end", "✓ cb2 ran", "✓ cb3 ran"],
+    explain: "cb2 finished and was popped. Now cb3 is pulled from Microtask Queue. ALL microtasks must drain before any macrotask runs."
+  },
+  {
+    tick: 9,
+    stack: ["Global EC"],
+    micro: [],
+    macro: ["cb1"],
+    console: ["script start", "script end", "✓ cb2 ran", "✓ cb3 ran"],
+    explain: "Microtask queue is now empty! Event Loop checks macrotask queue. cb1 (our setTimeout callback) is waiting. It will be picked up next."
+  },
+  {
+    tick: 10,
+    stack: ["Global EC", "cb1 (macrotask)"],
+    micro: [],
+    macro: [],
+    console: ["script start", "script end", "✓ cb2 ran", "✓ cb3 ran", "✓ cb1 ran"],
+    explain: "One macrotask is pulled: cb1 runs on the call stack. After it finishes, the Event Loop will check microtasks again (there are none), then check macrotasks (also empty). Done!"
+  },
+  {
+    tick: 11,
+    stack: ["Global EC"],
+    micro: [],
+    macro: [],
+    console: ["script start", "script end", "✓ cb2 ran", "✓ cb3 ran", "✓ cb1 ran"],
+    explain: "✅ All done! Final order: script start → script end → cb2 → cb3 → cb1. Sync first, then all microtasks, then one macrotask per loop tick."
+  }
+];
+
+let elStep = 0;
+
+function renderElState(state) {
+  // Stack
+  const stackEl = document.getElementById('el-stack');
+  const stackEmpty = document.getElementById('el-stack-empty');
+  stackEl.innerHTML = '';
+  if (state.stack.length === 0) {
+    stackEl.innerHTML = '<div style="text-align:center; color:var(--muted); font-size:0.75rem;" id="el-stack-empty">empty</div>';
+  } else {
+    state.stack.forEach((item, i) => {
+      const el = document.createElement('div');
+      const isTop = i === state.stack.length - 1;
+      el.style.cssText = `padding:7px 12px; border-radius:7px; font-family:'JetBrains Mono',monospace; font-size:0.78rem; animation:slideIn 0.3s ease; border:1px solid;`;
+      if (item === 'Global EC') {
+        el.style.background = 'rgba(124,58,237,0.2)';
+        el.style.borderColor = 'rgba(124,58,237,0.5)';
+        el.style.color = '#c4b5fd';
+      } else {
+        el.style.background = isTop ? 'rgba(6,182,212,0.25)' : 'rgba(6,182,212,0.1)';
+        el.style.borderColor = isTop ? 'var(--fec)' : 'rgba(6,182,212,0.3)';
+        el.style.color = isTop ? '#a5f3fc' : 'var(--muted)';
+      }
+      el.textContent = item;
+      stackEl.appendChild(el);
+    });
+  }
+
+  // Microtask
+  const microEl = document.getElementById('el-micro');
+  microEl.innerHTML = '';
+  if (state.micro.length === 0) {
+    microEl.innerHTML = '<div style="text-align:center; color:var(--muted); font-size:0.75rem;">empty</div>';
+  } else {
+    state.micro.forEach((item, i) => {
+      const el = document.createElement('div');
+      el.style.cssText = `padding:7px 12px; border-radius:7px; font-family:'JetBrains Mono',monospace; font-size:0.78rem; background:rgba(16,185,129,0.15); border:1px solid rgba(16,185,129,0.4); color:#6ee7b7; animation:slideIn 0.3s ease;`;
+      el.textContent = (i === 0 ? '→ ' : '   ') + item;
+      microEl.appendChild(el);
+    });
+  }
+
+  // Macrotask
+  const macroEl = document.getElementById('el-macro');
+  macroEl.innerHTML = '';
+  if (state.macro.length === 0) {
+    macroEl.innerHTML = '<div style="text-align:center; color:var(--muted); font-size:0.75rem;">empty</div>';
+  } else {
+    state.macro.forEach((item, i) => {
+      const el = document.createElement('div');
+      el.style.cssText = `padding:7px 12px; border-radius:7px; font-family:'JetBrains Mono',monospace; font-size:0.78rem; background:rgba(245,158,11,0.15); border:1px solid rgba(245,158,11,0.4); color:#fde68a; animation:slideIn 0.3s ease;`;
+      el.textContent = (i === 0 ? '→ ' : '   ') + item;
+      macroEl.appendChild(el);
+    });
+  }
+
+  // Console
+  const consoleEl = document.getElementById('el-console');
+  consoleEl.innerHTML = state.console.map(l => `<div style="animation:slideIn 0.2s ease;">&gt; ${l}</div>`).join('');
+
+  // Explanation
+  document.getElementById('el-explain').textContent = state.explain;
+
+  // Tick
+  document.getElementById('el-tick-num').textContent = state.tick;
+}
+
+function elNext() {
+  if (elStep < elStates.length - 1) {
+    elStep++;
+    renderElState(elStates[elStep]);
+  }
+}
+
+function elReset() {
+  elStep = 0;
+  renderElState(elStates[0]);
+}
+
+renderElState(elStates[0]);
+    </script>
+</body>
+
+</html>
