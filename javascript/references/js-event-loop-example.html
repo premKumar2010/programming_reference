@@ -1,0 +1,1297 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JS Event Loop Visual Guide</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;600;700&family=Syne:wght@400;700;800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #13131a;
+    --surface2: #1c1c28;
+    --border: #2a2a3d;
+    --text: #e8e8f0;
+    --muted: #6b6b8a;
+    --stack: #ff6b6b;
+    --micro: #4ecdc4;
+    --macro: #ffd93d;
+    --resolve: #6bcb77;
+    --accent: #a78bfa;
+    --code-bg: #0d0d14;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Syne', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* Noise texture overlay */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0.4;
+  }
+
+  .container { max-width: 1100px; margin: 0 auto; padding: 2rem; position: relative; z-index: 1; }
+
+  /* Header */
+  header {
+    text-align: center;
+    padding: 3rem 0 2rem;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 3rem;
+  }
+
+  header .label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    letter-spacing: 0.3em;
+    color: var(--accent);
+    text-transform: uppercase;
+    margin-bottom: 1rem;
+    opacity: 0.8;
+  }
+
+  header h1 {
+    font-size: clamp(2rem, 5vw, 3.5rem);
+    font-weight: 800;
+    line-height: 1;
+    letter-spacing: -0.02em;
+    background: linear-gradient(135deg, #fff 30%, var(--accent) 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 0.75rem;
+  }
+
+  header p {
+    color: var(--muted);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.9rem;
+  }
+
+  /* Legend */
+  .legend {
+    display: flex;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin-bottom: 3rem;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.8rem;
+    color: var(--muted);
+  }
+
+  .legend-dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  /* Code block */
+  .code-section {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    margin-bottom: 3rem;
+  }
+
+  .code-header {
+    background: var(--surface);
+    padding: 0.75rem 1.25rem;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .dot { width: 10px; height: 10px; border-radius: 50%; }
+  .dot.r { background: #ff5f57; }
+  .dot.y { background: #febc2e; }
+  .dot.g { background: #28c840; }
+
+  .code-header span {
+    margin-left: auto;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--muted);
+  }
+
+  pre {
+    padding: 1.5rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.85rem;
+    line-height: 1.8;
+    overflow-x: auto;
+  }
+
+  .kw { color: #c792ea; }
+  .fn { color: #82aaff; }
+  .str { color: #c3e88d; }
+  .cm { color: #546e7a; font-style: italic; }
+  .num { color: var(--yellow, #f78c6c); }
+
+  /* Tabs */
+  .tab-nav {
+    display: flex;
+    gap: 0;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 2.5rem;
+    overflow-x: auto;
+  }
+
+  .tab-btn {
+    padding: 0.75rem 1.5rem;
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--muted);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.8rem;
+    cursor: pointer;
+    white-space: nowrap;
+    transition: all 0.2s;
+    letter-spacing: 0.05em;
+  }
+
+  .tab-btn:hover { color: var(--text); }
+  .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  /* Phase cards */
+  .phase {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    margin-bottom: 1.5rem;
+    animation: slideIn 0.3s ease;
+  }
+
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .phase-header {
+    padding: 1rem 1.25rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    cursor: pointer;
+    background: var(--surface);
+    user-select: none;
+  }
+
+  .phase-time {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 0.2rem 0.7rem;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+
+  .phase-title { font-size: 0.95rem; font-weight: 700; flex: 1; }
+  .phase-toggle { color: var(--muted); font-size: 0.8rem; transition: transform 0.2s; }
+  .phase.open .phase-toggle { transform: rotate(180deg); }
+
+  .phase-body {
+    display: none;
+    padding: 1.25rem;
+    border-top: 1px solid var(--border);
+    background: var(--code-bg);
+  }
+  .phase.open .phase-body { display: block; }
+
+  /* Queue visualizer */
+  .queues {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 1rem;
+    margin-bottom: 1rem;
+  }
+
+  @media (max-width: 640px) {
+    .queues { grid-template-columns: 1fr; }
+  }
+
+  .queue-box {
+    border-radius: 8px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+
+  .queue-label {
+    padding: 0.5rem 0.75rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    letter-spacing: 0.1em;
+    font-weight: 600;
+    text-transform: uppercase;
+  }
+
+  .queue-label.stack { background: rgba(255,107,107,0.15); color: var(--stack); }
+  .queue-label.micro { background: rgba(78,205,196,0.15); color: var(--micro); }
+  .queue-label.macro { background: rgba(255,217,61,0.15); color: var(--macro); }
+
+  .queue-items {
+    padding: 0.5rem;
+    min-height: 60px;
+    background: var(--surface2);
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  .queue-item {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    padding: 0.35rem 0.6rem;
+    border-radius: 4px;
+    background: var(--surface);
+    border-left: 3px solid;
+  }
+
+  .queue-item.stack { border-color: var(--stack); color: var(--stack); }
+  .queue-item.micro { border-color: var(--micro); color: var(--micro); }
+  .queue-item.macro { border-color: var(--macro); color: var(--macro); }
+  .queue-item.resolve { border-color: var(--resolve); color: var(--resolve); }
+  .queue-item.empty { color: var(--muted); border-color: var(--border); font-style: italic; }
+
+  /* Steps list */
+  .steps { list-style: none; }
+  .step {
+    display: flex;
+    gap: 1rem;
+    padding: 0.6rem 0;
+    border-bottom: 1px solid var(--border);
+    align-items: flex-start;
+    font-size: 0.88rem;
+    line-height: 1.5;
+  }
+  .step:last-child { border-bottom: none; }
+
+  .step-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    background: var(--surface2);
+    color: var(--muted);
+    width: 22px; height: 22px;
+    display: flex; align-items: center; justify-content: center;
+    border-radius: 4px;
+    flex-shrink: 0;
+    margin-top: 1px;
+  }
+
+  .step code {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.8rem;
+    background: var(--surface2);
+    padding: 0.1rem 0.4rem;
+    border-radius: 3px;
+  }
+
+  .output-tag {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.7rem;
+    background: rgba(107,203,119,0.15);
+    color: var(--resolve);
+    border: 1px solid rgba(107,203,119,0.3);
+    padding: 0.1rem 0.5rem;
+    border-radius: 20px;
+    white-space: nowrap;
+  }
+
+  /* Output summary */
+  .output-box {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    margin-bottom: 2.5rem;
+  }
+
+  .output-box-header {
+    background: var(--surface);
+    padding: 0.75rem 1.25rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--muted);
+    border-bottom: 1px solid var(--border);
+    letter-spacing: 0.1em;
+  }
+
+  .output-line {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.6rem 1.25rem;
+    border-bottom: 1px solid var(--border);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.83rem;
+  }
+  .output-line:last-child { border-bottom: none; }
+
+  .output-line .time-badge {
+    font-size: 0.68rem;
+    padding: 0.15rem 0.5rem;
+    border-radius: 20px;
+    white-space: nowrap;
+    min-width: 70px;
+    text-align: center;
+  }
+  .time-badge.sync { background: rgba(167,139,250,0.15); color: var(--accent); border: 1px solid rgba(167,139,250,0.3); }
+  .time-badge.t5 { background: rgba(255,217,61,0.15); color: var(--macro); border: 1px solid rgba(255,217,61,0.3); }
+  .time-badge.t5m { background: rgba(78,205,196,0.15); color: var(--micro); border: 1px solid rgba(78,205,196,0.3); }
+  .time-badge.t7 { background: rgba(255,107,107,0.15); color: var(--stack); border: 1px solid rgba(255,107,107,0.3); }
+
+  .output-text { color: var(--resolve); }
+  .output-type { margin-left: auto; font-size: 0.68rem; color: var(--muted); }
+
+  /* Rule box */
+  .rule-box {
+    border: 1px solid rgba(167,139,250,0.3);
+    background: rgba(167,139,250,0.05);
+    border-radius: 12px;
+    padding: 1.25rem 1.5rem;
+    margin-bottom: 2.5rem;
+    font-size: 0.9rem;
+    line-height: 1.7;
+  }
+
+  .rule-box strong { color: var(--accent); }
+
+  /* Comparison table */
+  .compare-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.8rem;
+    margin-bottom: 2.5rem;
+  }
+
+  .compare-table th {
+    padding: 0.75rem 1rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    text-align: left;
+    color: var(--muted);
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    font-size: 0.7rem;
+  }
+
+  .compare-table td {
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--border);
+    background: var(--code-bg);
+    vertical-align: top;
+    line-height: 1.6;
+  }
+
+  .compare-table tr:hover td { background: var(--surface2); }
+
+  .yes { color: var(--resolve); }
+  .no { color: var(--stack); }
+  .na { color: var(--muted); }
+
+  /* Section title */
+  .section-title {
+    font-size: 1.3rem;
+    font-weight: 800;
+    margin-bottom: 1.25rem;
+    letter-spacing: -0.01em;
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .section-title::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  footer {
+    text-align: center;
+    padding: 2rem 0;
+    border-top: 1px solid var(--border);
+    margin-top: 1rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--muted);
+  }
+
+  /* Interactive playback */
+  .playback {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.5rem;
+    margin-bottom: 2.5rem;
+  }
+
+  .playback-controls {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+    margin-bottom: 1.25rem;
+    flex-wrap: wrap;
+  }
+
+  .btn {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.8rem;
+    padding: 0.5rem 1.1rem;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    cursor: pointer;
+    transition: all 0.15s;
+    background: var(--surface2);
+    color: var(--text);
+  }
+
+  .btn:hover { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .btn.primary:hover { opacity: 0.85; }
+
+  .step-indicator {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    color: var(--muted);
+    margin-left: auto;
+  }
+
+  .playback-description {
+    background: var(--code-bg);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem;
+    font-size: 0.88rem;
+    line-height: 1.6;
+    min-height: 60px;
+    margin-bottom: 1rem;
+    transition: all 0.2s;
+  }
+
+  .playback-queues .queue-items {
+    min-height: 50px;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <!-- Header -->
+  <header>
+    <div class="label">JavaScript Runtime</div>
+    <h1>Event Loop Deep Dive</h1>
+    <p>execution stack · microtask queue · macrotask queue · event loop</p>
+  </header>
+
+  <!-- Legend -->
+  <div class="legend">
+    <div class="legend-item"><div class="legend-dot" style="background:var(--stack)"></div> Execution Stack</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--micro)"></div> Microtask Queue</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--macro)"></div> Macrotask Queue</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--resolve)"></div> Console Output</div>
+    <div class="legend-item"><div class="legend-dot" style="background:var(--accent)"></div> Promise / Async</div>
+  </div>
+
+  <!-- Code -->
+  <div class="code-section">
+    <div class="code-header">
+      <div class="dot r"></div><div class="dot y"></div><div class="dot g"></div>
+      <span>script.js</span>
+    </div>
+    <pre><span class="kw">function</span> <span class="fn">second</span>() {
+  <span class="kw">return new</span> <span class="fn">Promise</span>((resolve, reject) => {
+    <span class="fn">setTimeout</span>(() => {
+      console.<span class="fn">log</span>(<span class="str">"promise resolved"</span>);
+      <span class="fn">resolve</span>();
+    }, <span class="num">5000</span>);           <span class="cm">// macrotask after 5s</span>
+  });
+}
+
+<span class="kw">async function</span> <span class="fn">one</span>() {
+  console.<span class="fn">log</span>(<span class="str">"start of function one"</span>);
+  <span class="kw">await</span> <span class="fn">second</span>();         <span class="cm">// suspends here — awaiting Promise</span>
+  <span class="fn">setTimeout</span>(() => {
+    console.<span class="fn">log</span>(<span class="str">"timeout under 1 minutes executed"</span>);
+  }, <span class="num">2000</span>);              <span class="cm">// macrotask after 5s+2s=7s</span>
+  console.<span class="fn">log</span>(<span class="str">"end of function one"</span>);
+}
+
+console.<span class="fn">log</span>(<span class="str">"start of program"</span>);   <span class="cm">// sync</span>
+<span class="fn">one</span>();
+console.<span class="fn">log</span>(<span class="str">"End of program"</span>);     <span class="cm">// sync — runs before one() finishes!</span></pre>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tab-nav">
+    <button class="tab-btn active" onclick="showTab('await-tab', this)">await version</button>
+    <button class="tab-btn" onclick="showTab('then-tab', this)">.then() version</button>
+    <button class="tab-btn" onclick="showTab('noawait-tab', this)">no await version</button>
+    <button class="tab-btn" onclick="showTab('compare-tab', this)">comparison</button>
+    <button class="tab-btn" onclick="showTab('webapi-tab', this)">web api vs queues</button>
+  </div>
+
+  <!-- ===== AWAIT TAB ===== -->
+  <div id="await-tab" class="tab-content active">
+
+    <div class="section-title">Interactive Playback</div>
+
+    <div class="playback">
+      <div class="playback-controls">
+        <button class="btn" onclick="prevStep()">← prev</button>
+        <button class="btn primary" onclick="nextStep()">next →</button>
+        <button class="btn" onclick="resetSteps()">reset</button>
+        <span class="step-indicator" id="step-indicator">step 0 / 14</span>
+      </div>
+      <div class="playback-description" id="playback-desc">Press <strong>next →</strong> to walk through execution step by step.</div>
+      <div class="queues playback-queues">
+        <div class="queue-box">
+          <div class="queue-label stack">Call Stack</div>
+          <div class="queue-items" id="pb-stack"><div class="queue-item empty">empty</div></div>
+        </div>
+        <div class="queue-box">
+          <div class="queue-label micro">Microtask Queue</div>
+          <div class="queue-items" id="pb-micro"><div class="queue-item empty">empty</div></div>
+        </div>
+        <div class="queue-box">
+          <div class="queue-label macro">Macrotask Queue</div>
+          <div class="queue-items" id="pb-macro"><div class="queue-item empty">empty</div></div>
+        </div>
+      </div>
+      <div id="pb-output" style="font-family:'JetBrains Mono',monospace;font-size:0.8rem;color:var(--muted);margin-top:0.5rem;"></div>
+    </div>
+
+    <div class="section-title">Phase Breakdown</div>
+
+    <div class="phase open">
+      <div class="phase-header" onclick="togglePhase(this)">
+        <div class="phase-time">t = 0ms</div>
+        <div class="phase-title">Phase 1 — Synchronous Execution</div>
+        <div class="phase-toggle">▼</div>
+      </div>
+      <div class="phase-body">
+        <div class="queues">
+          <div class="queue-box">
+            <div class="queue-label stack">Call Stack</div>
+            <div class="queue-items">
+              <div class="queue-item stack">main script</div>
+              <div class="queue-item stack">→ one()</div>
+            </div>
+          </div>
+          <div class="queue-box">
+            <div class="queue-label micro">Microtask</div>
+            <div class="queue-items"><div class="queue-item empty">empty</div></div>
+          </div>
+          <div class="queue-box">
+            <div class="queue-label macro">Macrotask</div>
+            <div class="queue-items">
+              <div class="queue-item macro">setTimeout 5000ms (pending)</div>
+            </div>
+          </div>
+        </div>
+        <ul class="steps">
+          <li class="step"><span class="step-num">1</span><span><code>console.log("start of program")</code> executes synchronously. <span class="output-tag">▶ "start of program"</span></span></li>
+          <li class="step"><span class="step-num">2</span><span><code>one()</code> is called and pushed onto the stack.</span></li>
+          <li class="step"><span class="step-num">3</span><span><code>console.log("start of function one")</code> runs. <span class="output-tag">▶ "start of function one"</span></span></li>
+          <li class="step"><span class="step-num">4</span><span><code>await second()</code> — <code>second()</code> is called, creates a Promise, registers a <strong>5000ms setTimeout</strong> in Web APIs, returns unresolved Promise.</span></li>
+          <li class="step"><span class="step-num">5</span><span><code>await</code> suspends <code>one()</code> and <strong>pops it off the stack</strong>. Control returns to the caller.</span></li>
+          <li class="step"><span class="step-num">6</span><span><code>console.log("End of program")</code> runs. <span class="output-tag">▶ "End of program"</span></span></li>
+          <li class="step"><span class="step-num">7</span><span>Main script finishes. Stack is <strong>empty</strong>. Event loop is now waiting.</span></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="phase">
+      <div class="phase-header" onclick="togglePhase(this)">
+        <div class="phase-time">t = 5000ms</div>
+        <div class="phase-title">Phase 2 — Macrotask: setTimeout from second() fires</div>
+        <div class="phase-toggle">▼</div>
+      </div>
+      <div class="phase-body">
+        <div class="queues">
+          <div class="queue-box">
+            <div class="queue-label stack">Call Stack</div>
+            <div class="queue-items">
+              <div class="queue-item stack">setTimeout callback</div>
+            </div>
+          </div>
+          <div class="queue-box">
+            <div class="queue-label micro">Microtask</div>
+            <div class="queue-items">
+              <div class="queue-item micro">resume one() after await</div>
+            </div>
+          </div>
+          <div class="queue-box">
+            <div class="queue-label macro">Macrotask</div>
+            <div class="queue-items"><div class="queue-item empty">empty</div></div>
+          </div>
+        </div>
+        <ul class="steps">
+          <li class="step"><span class="step-num">8</span><span>Stack is empty → event loop picks the macrotask from the queue.</span></li>
+          <li class="step"><span class="step-num">9</span><span><code>console.log("promise resolved")</code> executes. <span class="output-tag">▶ "promise resolved"</span></span></li>
+          <li class="step"><span class="step-num">10</span><span><code>resolve()</code> is called → Promise settles → <code>one()</code>'s continuation is scheduled as a <strong>microtask</strong>.</span></li>
+          <li class="step"><span class="step-num">11</span><span>setTimeout callback finishes, stack is empty → event loop <strong>drains microtasks first</strong>.</span></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="phase">
+      <div class="phase-header" onclick="togglePhase(this)">
+        <div class="phase-time">t ≈ 5000ms</div>
+        <div class="phase-title">Phase 3 — Microtask: one() resumes after await</div>
+        <div class="phase-toggle">▼</div>
+      </div>
+      <div class="phase-body">
+        <div class="queues">
+          <div class="queue-box">
+            <div class="queue-label stack">Call Stack</div>
+            <div class="queue-items">
+              <div class="queue-item stack">one() resumed</div>
+            </div>
+          </div>
+          <div class="queue-box">
+            <div class="queue-label micro">Microtask</div>
+            <div class="queue-items"><div class="queue-item empty">empty</div></div>
+          </div>
+          <div class="queue-box">
+            <div class="queue-label macro">Macrotask</div>
+            <div class="queue-items">
+              <div class="queue-item macro">setTimeout 2000ms (pending)</div>
+            </div>
+          </div>
+        </div>
+        <ul class="steps">
+          <li class="step"><span class="step-num">12</span><span><code>one()</code> resumes from where it paused. <code>setTimeout(2000)</code> is registered.</span></li>
+          <li class="step"><span class="step-num">13</span><span><code>console.log("end of function one")</code> runs. <span class="output-tag">▶ "end of function one"</span></span></li>
+          <li class="step"><span class="step-num">14</span><span><code>one()</code> completes. Stack is empty again.</span></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="phase">
+      <div class="phase-header" onclick="togglePhase(this)">
+        <div class="phase-time">t = 7000ms</div>
+        <div class="phase-title">Phase 4 — Macrotask: 2000ms timer fires</div>
+        <div class="phase-toggle">▼</div>
+      </div>
+      <div class="phase-body">
+        <div class="queues">
+          <div class="queue-box">
+            <div class="queue-label stack">Call Stack</div>
+            <div class="queue-items">
+              <div class="queue-item stack">setTimeout callback</div>
+            </div>
+          </div>
+          <div class="queue-box">
+            <div class="queue-label micro">Microtask</div>
+            <div class="queue-items"><div class="queue-item empty">empty</div></div>
+          </div>
+          <div class="queue-box">
+            <div class="queue-label macro">Macrotask</div>
+            <div class="queue-items"><div class="queue-item empty">empty</div></div>
+          </div>
+        </div>
+        <ul class="steps">
+          <li class="step"><span class="step-num">15</span><span>Event loop picks up the last macrotask.</span></li>
+          <li class="step"><span class="step-num">16</span><span><code>console.log("timeout under 1 minutes executed")</code> runs. <span class="output-tag">▶ "timeout under 1 minutes executed"</span></span></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="section-title">Final Output</div>
+    <div class="output-box">
+      <div class="output-box-header">CONSOLE OUTPUT</div>
+      <div class="output-line"><span class="time-badge sync">t=0ms</span><span class="output-text">"start of program"</span><span class="output-type">synchronous</span></div>
+      <div class="output-line"><span class="time-badge sync">t=0ms</span><span class="output-text">"start of function one"</span><span class="output-type">synchronous</span></div>
+      <div class="output-line"><span class="time-badge sync">t=0ms</span><span class="output-text">"End of program"</span><span class="output-type">synchronous</span></div>
+      <div class="output-line"><span class="time-badge t5">t=5000ms</span><span class="output-text">"promise resolved"</span><span class="output-type">macrotask</span></div>
+      <div class="output-line"><span class="time-badge t5m">t=5000ms</span><span class="output-text">"end of function one"</span><span class="output-type">microtask</span></div>
+      <div class="output-line"><span class="time-badge t7">t=7000ms</span><span class="output-text">"timeout under 1 minutes executed"</span><span class="output-type">macrotask</span></div>
+    </div>
+
+    <div class="rule-box">
+      ⚡ <strong>Key Rule:</strong> Microtasks always drain completely before the event loop picks up the next macrotask. That's why "end of function one" appears immediately after "promise resolved" — both happen at the same event loop tick (t=5000ms), because <code>await</code> resumes as a microtask, not a new macrotask.
+    </div>
+
+  </div>
+
+  <!-- ===== THEN TAB ===== -->
+  <div id="then-tab" class="tab-content">
+    <div class="code-section" style="margin-bottom:2rem">
+      <div class="code-header"><div class="dot r"></div><div class="dot y"></div><div class="dot g"></div><span>using .then()</span></div>
+      <pre><span class="kw">function</span> <span class="fn">one</span>() {
+  console.<span class="fn">log</span>(<span class="str">"start of function one"</span>);
+  <span class="fn">second</span>().<span class="fn">then</span>(() => {          <span class="cm">// .then callback = microtask when resolved</span>
+    <span class="fn">setTimeout</span>(() => {
+      console.<span class="fn">log</span>(<span class="str">"timeout under 1 minutes executed"</span>);
+    }, <span class="num">2000</span>);
+    console.<span class="fn">log</span>(<span class="str">"end of function one"</span>);
+  });
+  <span class="cm">// no await — one() does NOT pause here!</span>
+}</pre>
+    </div>
+
+    <div class="rule-box">
+      🔄 <strong>.then() vs await:</strong> <code>await</code> is syntactic sugar over <code>.then()</code>. Both schedule the continuation as a <strong>microtask</strong> when the Promise resolves. The output is <strong>identical</strong> to the await version. The only difference is syntax — <code>await</code> makes async code read like synchronous code.
+    </div>
+
+    <div class="section-title">Output — Same as await!</div>
+    <div class="output-box">
+      <div class="output-box-header">CONSOLE OUTPUT</div>
+      <div class="output-line"><span class="time-badge sync">t=0ms</span><span class="output-text">"start of program"</span><span class="output-type">synchronous</span></div>
+      <div class="output-line"><span class="time-badge sync">t=0ms</span><span class="output-text">"start of function one"</span><span class="output-type">synchronous</span></div>
+      <div class="output-line"><span class="time-badge sync">t=0ms</span><span class="output-text">"End of program"</span><span class="output-type">synchronous</span></div>
+      <div class="output-line"><span class="time-badge t5">t=5000ms</span><span class="output-text">"promise resolved"</span><span class="output-type">macrotask</span></div>
+      <div class="output-line"><span class="time-badge t5m">t=5000ms</span><span class="output-text">"end of function one"</span><span class="output-type">microtask (.then callback)</span></div>
+      <div class="output-line"><span class="time-badge t7">t=7000ms</span><span class="output-text">"timeout under 1 minutes executed"</span><span class="output-type">macrotask</span></div>
+    </div>
+
+    <div class="section-title">Internal Mechanism</div>
+    <ul class="steps">
+      <li class="step"><span class="step-num">→</span><span>Both <code>await expr</code> and <code>expr.then(cb)</code> register <code>cb</code> to run when the Promise resolves.</span></li>
+      <li class="step"><span class="step-num">→</span><span>In both cases, <code>cb</code> is placed in the <strong>Microtask Queue</strong>, not the Macrotask Queue.</span></li>
+      <li class="step"><span class="step-num">→</span><span>With <code>await</code>, the async function itself is the continuation. With <code>.then()</code>, the callback argument is the continuation.</span></li>
+      <li class="step"><span class="step-num">→</span><span>Either way, the continuation runs <em>before</em> the next macrotask, so timing is identical.</span></li>
+    </ul>
+  </div>
+
+  <!-- ===== NO AWAIT TAB ===== -->
+  <div id="noawait-tab" class="tab-content">
+    <div class="code-section" style="margin-bottom:2rem">
+      <div class="code-header"><div class="dot r"></div><div class="dot y"></div><div class="dot g"></div><span>no await — fire and forget</span></div>
+      <pre><span class="kw">function</span> <span class="fn">one</span>() {                   <span class="cm">// not async anymore</span>
+  console.<span class="fn">log</span>(<span class="str">"start of function one"</span>);
+  <span class="fn">second</span>();                         <span class="cm">// Promise returned but discarded!</span>
+  <span class="fn">setTimeout</span>(() => {               <span class="cm">// registers 2000ms timer immediately</span>
+    console.<span class="fn">log</span>(<span class="str">"timeout under 1 minutes executed"</span>);
+  }, <span class="num">2000</span>);
+  console.<span class="fn">log</span>(<span class="str">"end of function one"</span>); <span class="cm">// runs synchronously!</span>
+}</pre>
+    </div>
+
+    <div class="section-title">Phase Breakdown</div>
+
+    <div class="phase open">
+      <div class="phase-header" onclick="togglePhase(this)">
+        <div class="phase-time">t = 0ms</div>
+        <div class="phase-title">Everything runs synchronously — no pause</div>
+        <div class="phase-toggle">▼</div>
+      </div>
+      <div class="phase-body">
+        <div class="queues">
+          <div class="queue-box">
+            <div class="queue-label stack">Call Stack</div>
+            <div class="queue-items"><div class="queue-item stack">main script → one()</div></div>
+          </div>
+          <div class="queue-box">
+            <div class="queue-label micro">Microtask</div>
+            <div class="queue-items"><div class="queue-item empty">empty</div></div>
+          </div>
+          <div class="queue-box">
+            <div class="queue-label macro">Macrotask</div>
+            <div class="queue-items">
+              <div class="queue-item macro">setTimeout 5000ms</div>
+              <div class="queue-item macro">setTimeout 2000ms</div>
+            </div>
+          </div>
+        </div>
+        <ul class="steps">
+          <li class="step"><span class="step-num">1</span><span><code>"start of program"</code> prints. <span class="output-tag">▶ "start of program"</span></span></li>
+          <li class="step"><span class="step-num">2</span><span><code>one()</code> called. <code>"start of function one"</code> prints. <span class="output-tag">▶ "start of function one"</span></span></li>
+          <li class="step"><span class="step-num">3</span><span><code>second()</code> is called — 5000ms timer registered — Promise returned and <strong>immediately discarded</strong>. No await, no .then.</span></li>
+          <li class="step"><span class="step-num">4</span><span>2000ms setTimeout registered. <code>one()</code> never pauses.</span></li>
+          <li class="step"><span class="step-num">5</span><span><code>"end of function one"</code> prints <strong>synchronously</strong>. <span class="output-tag">▶ "end of function one"</span></span></li>
+          <li class="step"><span class="step-num">6</span><span><code>"End of program"</code> prints. <span class="output-tag">▶ "End of program"</span></span></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="phase">
+      <div class="phase-header" onclick="togglePhase(this)">
+        <div class="phase-time">t = 2000ms</div>
+        <div class="phase-title">2000ms timer fires first (not 5000ms!)</div>
+        <div class="phase-toggle">▼</div>
+      </div>
+      <div class="phase-body">
+        <ul class="steps">
+          <li class="step"><span class="step-num">7</span><span>The 2000ms timer fires. <code>"timeout under 1 minutes executed"</code> prints. <span class="output-tag">▶ "timeout..."</span></span></li>
+          <li class="step"><span class="step-num">!</span><span>This fires at <strong>t=2000ms</strong>, not t=7000ms! Because the timer started at t=0 without waiting for the Promise.</span></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="phase">
+      <div class="phase-header" onclick="togglePhase(this)">
+        <div class="phase-time">t = 5000ms</div>
+        <div class="phase-title">5000ms timer fires — but nobody is listening</div>
+        <div class="phase-toggle">▼</div>
+      </div>
+      <div class="phase-body">
+        <ul class="steps">
+          <li class="step"><span class="step-num">8</span><span><code>"promise resolved"</code> prints. <span class="output-tag">▶ "promise resolved"</span></span></li>
+          <li class="step"><span class="step-num">9</span><span><code>resolve()</code> is called but the Promise has no consumers (no .then, no await). It's a no-op.</span></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="section-title">Final Output — Very Different!</div>
+    <div class="output-box">
+      <div class="output-box-header">CONSOLE OUTPUT</div>
+      <div class="output-line"><span class="time-badge sync">t=0ms</span><span class="output-text">"start of program"</span><span class="output-type">synchronous</span></div>
+      <div class="output-line"><span class="time-badge sync">t=0ms</span><span class="output-text">"start of function one"</span><span class="output-type">synchronous</span></div>
+      <div class="output-line"><span class="time-badge sync">t=0ms</span><span class="output-text">"end of function one"</span><span class="output-type">synchronous ← moves here!</span></div>
+      <div class="output-line"><span class="time-badge sync">t=0ms</span><span class="output-text">"End of program"</span><span class="output-type">synchronous</span></div>
+      <div class="output-line"><span class="time-badge t5">t=2000ms</span><span class="output-text">"timeout under 1 minutes executed"</span><span class="output-type">macrotask ← earlier!</span></div>
+      <div class="output-line"><span class="time-badge t7">t=5000ms</span><span class="output-text">"promise resolved"</span><span class="output-type">macrotask ← last!</span></div>
+    </div>
+  </div>
+
+  <!-- ===== COMPARE TAB ===== -->
+  <div id="compare-tab" class="tab-content">
+    <div class="section-title">Side-by-Side Comparison</div>
+    <table class="compare-table">
+      <thead>
+        <tr>
+          <th>Behavior</th>
+          <th style="color:var(--accent)">await</th>
+          <th style="color:var(--micro)">.then()</th>
+          <th style="color:var(--stack)">no await</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>one() pauses at second()?</td>
+          <td class="yes">✓ Yes</td>
+          <td class="yes">✓ Yes (inside callback)</td>
+          <td class="no">✗ No — fire & forget</td>
+        </tr>
+        <tr>
+          <td>"end of function one" timing</td>
+          <td>t = 5000ms</td>
+          <td>t = 5000ms</td>
+          <td>t = 0ms (sync)</td>
+        </tr>
+        <tr>
+          <td>"timeout" timing</td>
+          <td>t = 7000ms</td>
+          <td>t = 7000ms</td>
+          <td>t = 2000ms</td>
+        </tr>
+        <tr>
+          <td>"promise resolved" timing</td>
+          <td>t = 5000ms</td>
+          <td>t = 5000ms</td>
+          <td>t = 5000ms</td>
+        </tr>
+        <tr>
+          <td>Continuation mechanism</td>
+          <td>Microtask</td>
+          <td>Microtask</td>
+          <td>None</td>
+        </tr>
+        <tr>
+          <td>Promise result used?</td>
+          <td class="yes">✓ Yes</td>
+          <td class="yes">✓ Yes</td>
+          <td class="no">✗ No (discarded)</td>
+        </tr>
+        <tr>
+          <td>Output order same?</td>
+          <td class="yes">✓ Identical</td>
+          <td class="yes">✓ Identical</td>
+          <td class="no">✗ Different</td>
+        </tr>
+        <tr>
+          <td>Requires async function?</td>
+          <td class="yes">✓ Yes</td>
+          <td class="no">✗ No</td>
+          <td class="no">✗ No</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="rule-box">
+      🎯 <strong>The Core Insight:</strong> <code>await</code> and <code>.then()</code> produce <strong>identical runtime behavior</strong> — both schedule the continuation as a microtask. The difference is purely stylistic. Dropping both turns async code into "fire and forget", completely changing the execution order and timing.
+    </div>
+
+    <div class="section-title">Event Loop Rule Summary</div>
+    <ul class="steps">
+      <li class="step"><span class="step-num">1</span><span><strong>Run all synchronous code</strong> — the call stack must be fully empty first.</span></li>
+      <li class="step"><span class="step-num">2</span><span><strong>Drain all microtasks</strong> — process every item in the microtask queue (including newly added ones) before moving on.</span></li>
+      <li class="step"><span class="step-num">3</span><span><strong>Pick one macrotask</strong> — take the next timer/event callback from the macrotask queue.</span></li>
+      <li class="step"><span class="step-num">4</span><span><strong>Repeat</strong> — go back to step 2, drain microtasks again, then pick another macrotask.</span></li>
+    </ul>
+  </div>
+
+  <!-- ===== WEB API VS QUEUES TAB ===== -->
+  <div id="webapi-tab" class="tab-content">
+
+    <div class="section-title">The Short Answer</div>
+    <div class="rule-box" style="font-size:1rem">
+      ❌ <strong>No — Web APIs and the Microtask Queue are completely different things.</strong><br><br>
+      Web APIs live <em>outside</em> the JS engine and handle background work (timers, network). The Microtask Queue lives <em>inside</em> the runtime and holds callbacks that are <strong>already ready to run</strong>.
+    </div>
+
+    <div class="section-title">The Full Runtime Architecture</div>
+
+    <!-- Architecture diagram -->
+    <div style="background:var(--code-bg);border:1px solid var(--border);border-radius:12px;padding:1.5rem;margin-bottom:2rem;overflow-x:auto;">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;min-width:500px">
+
+        <!-- Left: JS Engine -->
+        <div style="border:2px solid var(--accent);border-radius:10px;overflow:hidden">
+          <div style="background:rgba(167,139,250,0.15);padding:0.6rem 1rem;font-family:'JetBrains Mono',monospace;font-size:0.75rem;color:var(--accent);letter-spacing:0.1em;text-transform:uppercase;font-weight:700">JS Engine (V8 / SpiderMonkey)</div>
+          <div style="padding:1rem;display:flex;flex-direction:column;gap:0.75rem">
+            <div style="border:1px solid var(--stack);border-radius:6px;overflow:hidden">
+              <div style="background:rgba(255,107,107,0.15);padding:0.4rem 0.75rem;font-family:'JetBrains Mono',monospace;font-size:0.7rem;color:var(--stack);font-weight:600">CALL STACK</div>
+              <div style="padding:0.5rem 0.75rem;font-family:'JetBrains Mono',monospace;font-size:0.75rem;color:var(--muted)">Runs JS code<br>LIFO order</div>
+            </div>
+            <div style="border:1px solid var(--micro);border-radius:6px;overflow:hidden">
+              <div style="background:rgba(78,205,196,0.15);padding:0.4rem 0.75rem;font-family:'JetBrains Mono',monospace;font-size:0.7rem;color:var(--micro);font-weight:600">MICROTASK QUEUE</div>
+              <div style="padding:0.5rem 0.75rem;font-family:'JetBrains Mono',monospace;font-size:0.75rem;color:var(--muted)">Promise .then()<br>await resumptions<br>queueMicrotask()</div>
+            </div>
+            <div style="border:1px solid var(--macro);border-radius:6px;overflow:hidden">
+              <div style="background:rgba(255,217,61,0.15);padding:0.4rem 0.75rem;font-family:'JetBrains Mono',monospace;font-size:0.7rem;color:var(--macro);font-weight:600">MACROTASK QUEUE</div>
+              <div style="padding:0.5rem 0.75rem;font-family:'JetBrains Mono',monospace;font-size:0.75rem;color:var(--muted)">Callbacks from<br>completed Web APIs</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right: Web APIs + Event Loop -->
+        <div style="display:flex;flex-direction:column;gap:0.75rem">
+          <div style="border:2px solid var(--resolve);border-radius:10px;overflow:hidden;flex:1">
+            <div style="background:rgba(107,203,119,0.15);padding:0.6rem 1rem;font-family:'JetBrains Mono',monospace;font-size:0.75rem;color:var(--resolve);letter-spacing:0.1em;text-transform:uppercase;font-weight:700">Web APIs (Browser/Node)</div>
+            <div style="padding:1rem;display:flex;flex-direction:column;gap:0.5rem">
+              <div style="font-family:'JetBrains Mono',monospace;font-size:0.75rem;background:var(--surface2);padding:0.4rem 0.75rem;border-radius:4px;color:var(--muted)">⏱ setTimeout / setInterval</div>
+              <div style="font-family:'JetBrains Mono',monospace;font-size:0.75rem;background:var(--surface2);padding:0.4rem 0.75rem;border-radius:4px;color:var(--muted)">🌐 fetch / XMLHttpRequest</div>
+              <div style="font-family:'JetBrains Mono',monospace;font-size:0.75rem;background:var(--surface2);padding:0.4rem 0.75rem;border-radius:4px;color:var(--muted)">🖱 DOM events</div>
+              <div style="font-family:'JetBrains Mono',monospace;font-size:0.75rem;background:var(--surface2);padding:0.4rem 0.75rem;border-radius:4px;color:var(--muted)">📍 geolocation, etc.</div>
+              <div style="font-family:'JetBrains Mono',monospace;font-size:0.7rem;color:var(--resolve);margin-top:0.25rem;opacity:0.7">Runs OUTSIDE the JS engine</div>
+            </div>
+          </div>
+          <div style="border:2px solid var(--border);border-radius:10px;overflow:hidden">
+            <div style="background:var(--surface);padding:0.6rem 1rem;font-family:'JetBrains Mono',monospace;font-size:0.75rem;color:var(--text);letter-spacing:0.1em;text-transform:uppercase;font-weight:700">Event Loop</div>
+            <div style="padding:0.75rem 1rem;font-family:'JetBrains Mono',monospace;font-size:0.72rem;color:var(--muted);line-height:1.7">
+              Watches both queues.<br>
+              Moves ready callbacks from<br>
+              Web APIs → Macrotask Queue.<br>
+              Orchestrates execution order.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Flow arrow -->
+      <div style="text-align:center;margin-top:1rem;font-family:'JetBrains Mono',monospace;font-size:0.75rem;color:var(--muted)">
+        Web APIs (waiting) → Macrotask Queue (ready) → Event Loop picks up → Call Stack runs it
+      </div>
+    </div>
+
+    <div class="section-title">Three-Stop Journey of setTimeout</div>
+    <ul class="steps">
+      <li class="step">
+        <span class="step-num">1</span>
+        <span>You call <code>setTimeout(fn, 5000)</code>. JS hands <code>fn</code> and the 5000ms delay to the <strong style="color:var(--resolve)">Web API</strong>. JS doesn't wait — it moves on immediately. The Web API counts time <em>in the background</em>, completely outside JS.</span>
+      </li>
+      <li class="step">
+        <span class="step-num">2</span>
+        <span>After 5 seconds, the Web API says "done!" and pushes <code>fn</code> into the <strong style="color:var(--macro)">Macrotask Queue</strong>. <code>fn</code> is now <em>ready to run</em> but hasn't run yet.</span>
+      </li>
+      <li class="step">
+        <span class="step-num">3</span>
+        <span>The <strong>Event Loop</strong> checks: is the call stack empty? Are there microtasks? If both are clear, it picks <code>fn</code> from the Macrotask Queue and pushes it onto the <strong style="color:var(--stack)">Call Stack</strong> to execute.</span>
+      </li>
+    </ul>
+
+    <div class="section-title">Comparison Table</div>
+    <table class="compare-table">
+      <thead>
+        <tr>
+          <th>Property</th>
+          <th style="color:var(--resolve)">Web APIs</th>
+          <th style="color:var(--micro)">Microtask Queue</th>
+          <th style="color:var(--macro)">Macrotask Queue</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Location</td>
+          <td>Outside JS engine (browser/Node)</td>
+          <td>Inside JS runtime</td>
+          <td>Inside JS runtime</td>
+        </tr>
+        <tr>
+          <td>State of items</td>
+          <td>Still waiting / running</td>
+          <td>Ready to execute</td>
+          <td>Ready to execute</td>
+        </tr>
+        <tr>
+          <td>What goes in</td>
+          <td>Timers, network calls, events</td>
+          <td>Promise callbacks, await</td>
+          <td>Completed Web API callbacks</td>
+        </tr>
+        <tr>
+          <td>Examples</td>
+          <td><code>setTimeout</code>, <code>fetch</code>, <code>addEventListener</code></td>
+          <td><code>.then()</code>, <code>await</code>, <code>queueMicrotask()</code></td>
+          <td>Timer callbacks, fetch responses</td>
+        </tr>
+        <tr>
+          <td>Priority</td>
+          <td class="na">N/A (not a queue)</td>
+          <td class="yes">Highest — drains fully first</td>
+          <td class="no">Lower — one per event loop tick</td>
+        </tr>
+        <tr>
+          <td>Blocks the stack?</td>
+          <td class="yes">No — runs in background</td>
+          <td class="no">Yes — runs before next macro</td>
+          <td class="no">Yes — when event loop picks it</td>
+        </tr>
+        <tr>
+          <td>Created by</td>
+          <td>Calling Web API functions</td>
+          <td>Resolving/rejecting Promises</td>
+          <td>Web APIs completing their work</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="section-title">Mental Model</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:1rem;margin-bottom:2rem">
+      <div style="background:rgba(107,203,119,0.08);border:1px solid rgba(107,203,119,0.25);border-radius:10px;padding:1.25rem;text-align:center">
+        <div style="font-size:1.75rem;margin-bottom:0.5rem">🏃</div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:0.7rem;color:var(--resolve);font-weight:700;margin-bottom:0.5rem;text-transform:uppercase">Web APIs</div>
+        <div style="font-size:0.83rem;color:var(--muted);line-height:1.5">The <strong style="color:var(--text)">waiting room</strong>. Work is being done in the background. You can't run it yet.</div>
+      </div>
+      <div style="background:rgba(78,205,196,0.08);border:1px solid rgba(78,205,196,0.25);border-radius:10px;padding:1.25rem;text-align:center">
+        <div style="font-size:1.75rem;margin-bottom:0.5rem">⚡</div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:0.7rem;color:var(--micro);font-weight:700;margin-bottom:0.5rem;text-transform:uppercase">Microtask Queue</div>
+        <div style="font-size:0.83rem;color:var(--muted);line-height:1.5">The <strong style="color:var(--text)">VIP fast lane</strong>. Ready to run and gets priority over everything else.</div>
+      </div>
+      <div style="background:rgba(255,217,61,0.08);border:1px solid rgba(255,217,61,0.25);border-radius:10px;padding:1.25rem;text-align:center">
+        <div style="font-size:1.75rem;margin-bottom:0.5rem">🚌</div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:0.7rem;color:var(--macro);font-weight:700;margin-bottom:0.5rem;text-transform:uppercase">Macrotask Queue</div>
+        <div style="font-size:0.83rem;color:var(--muted);line-height:1.5">The <strong style="color:var(--text)">regular queue</strong>. Ready to run but waits its turn, one at a time.</div>
+      </div>
+    </div>
+
+    <div class="rule-box">
+      🔑 <strong>Key insight:</strong> Web APIs are not a queue at all — they're a parallel execution environment. A <code>setTimeout</code> callback lives in the Web API while the timer counts down, then moves to the Macrotask Queue once it's ready. It visits <strong>two separate places</strong> before ever reaching the call stack. The Microtask Queue, by contrast, holds Promise continuations that were never "waiting" on anything external — they just needed the current task to finish.
+    </div>
+
+  </div>
+
+  <footer>JavaScript Event Loop Deep Dive · Built with vanilla HTML/CSS/JS</footer>
+</div>
+
+<script>
+  function togglePhase(header) {
+    const phase = header.parentElement;
+    phase.classList.toggle('open');
+  }
+
+  function showTab(id, btn) {
+    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+    btn.classList.add('active');
+  }
+
+  // Playback steps
+  const steps = [
+    {
+      desc: 'Execution begins. The main script is pushed onto the call stack.',
+      stack: ['main script'],
+      micro: [],
+      macro: [],
+      output: []
+    },
+    {
+      desc: '<code>console.log("start of program")</code> executes synchronously.',
+      stack: ['main script'],
+      micro: [],
+      macro: [],
+      output: ['"start of program"']
+    },
+    {
+      desc: '<code>one()</code> is called and pushed onto the call stack.',
+      stack: ['main script', 'one()'],
+      micro: [],
+      macro: [],
+      output: ['"start of program"']
+    },
+    {
+      desc: '<code>console.log("start of function one")</code> executes.',
+      stack: ['main script', 'one()'],
+      micro: [],
+      macro: [],
+      output: ['"start of program"', '"start of function one"']
+    },
+    {
+      desc: '<code>await second()</code> — <code>second()</code> is called, creates a Promise, registers a 5000ms timer in Web APIs.',
+      stack: ['main script', 'one()', 'second()'],
+      micro: [],
+      macro: ['⏱ setTimeout 5000ms (Web APIs)'],
+      output: ['"start of program"', '"start of function one"']
+    },
+    {
+      desc: '<code>await</code> sees an unresolved Promise. <strong>one() is suspended and popped off the stack.</strong> Control returns to main script.',
+      stack: ['main script'],
+      micro: [],
+      macro: ['⏱ setTimeout 5000ms (Web APIs)'],
+      output: ['"start of program"', '"start of function one"']
+    },
+    {
+      desc: '<code>console.log("End of program")</code> runs. Main script completes. Stack is empty.',
+      stack: [],
+      micro: [],
+      macro: ['⏱ setTimeout 5000ms (Web APIs)'],
+      output: ['"start of program"', '"start of function one"', '"End of program"']
+    },
+    {
+      desc: '<strong>t = 5000ms.</strong> The timer fires. Its callback enters the Macrotask Queue. Event loop picks it up (stack is empty).',
+      stack: ['setTimeout callback'],
+      micro: [],
+      macro: [],
+      output: ['"start of program"', '"start of function one"', '"End of program"']
+    },
+    {
+      desc: '<code>console.log("promise resolved")</code> executes inside the setTimeout callback.',
+      stack: ['setTimeout callback'],
+      micro: [],
+      macro: [],
+      output: ['"start of program"', '"start of function one"', '"End of program"', '"promise resolved"']
+    },
+    {
+      desc: '<code>resolve()</code> is called. The Promise settles. <code>one()</code>\'s continuation is scheduled as a <strong>microtask</strong>.',
+      stack: ['setTimeout callback'],
+      micro: ['resume one() after await'],
+      macro: [],
+      output: ['"start of program"', '"start of function one"', '"End of program"', '"promise resolved"']
+    },
+    {
+      desc: 'setTimeout callback finishes. Stack empty. Event loop <strong>drains microtasks first</strong> — one() resumes.',
+      stack: ['one() resumed (microtask)'],
+      micro: [],
+      macro: [],
+      output: ['"start of program"', '"start of function one"', '"End of program"', '"promise resolved"']
+    },
+    {
+      desc: 'Inside resumed <code>one()</code>: <code>setTimeout(2000)</code> is registered.',
+      stack: ['one() resumed (microtask)'],
+      micro: [],
+      macro: ['⏱ setTimeout 2000ms (Web APIs)'],
+      output: ['"start of program"', '"start of function one"', '"End of program"', '"promise resolved"']
+    },
+    {
+      desc: '<code>console.log("end of function one")</code> runs. one() completes. Stack empty.',
+      stack: [],
+      micro: [],
+      macro: ['⏱ setTimeout 2000ms (Web APIs)'],
+      output: ['"start of program"', '"start of function one"', '"End of program"', '"promise resolved"', '"end of function one"']
+    },
+    {
+      desc: '<strong>t = 7000ms.</strong> The 2000ms timer fires. Event loop picks it up. Final log prints.',
+      stack: ['setTimeout callback'],
+      micro: [],
+      macro: [],
+      output: ['"start of program"', '"start of function one"', '"End of program"', '"promise resolved"', '"end of function one"', '"timeout under 1 minutes executed"']
+    },
+    {
+      desc: '✅ <strong>Execution complete!</strong> All 6 lines have printed in the correct order.',
+      stack: [],
+      micro: [],
+      macro: [],
+      output: ['"start of program"', '"start of function one"', '"End of program"', '"promise resolved"', '"end of function one"', '"timeout under 1 minutes executed"']
+    }
+  ];
+
+  let currentStep = -1;
+
+  function renderStep(s) {
+    const stackEl = document.getElementById('pb-stack');
+    const microEl = document.getElementById('pb-micro');
+    const macroEl = document.getElementById('pb-macro');
+    const outEl = document.getElementById('pb-output');
+    const descEl = document.getElementById('playback-desc');
+
+    descEl.innerHTML = s.desc;
+
+    const render = (el, items, cls) => {
+      if (items.length === 0) {
+        el.innerHTML = '<div class="queue-item empty">empty</div>';
+      } else {
+        el.innerHTML = items.map(i => `<div class="queue-item ${cls}">${i}</div>`).join('');
+      }
+    };
+
+    render(stackEl, s.stack, 'stack');
+    render(microEl, s.micro, 'micro');
+    render(macroEl, s.macro, 'macro');
+
+    if (s.output.length > 0) {
+      outEl.innerHTML = '> ' + s.output.map(o => `<span style="color:var(--resolve)">${o}</span>`).join('  ');
+    } else {
+      outEl.innerHTML = '<span style="color:var(--muted)">// no output yet</span>';
+    }
+
+    document.getElementById('step-indicator').textContent = `step ${currentStep + 1} / ${steps.length}`;
+  }
+
+  function nextStep() {
+    if (currentStep < steps.length - 1) {
+      currentStep++;
+      renderStep(steps[currentStep]);
+    }
+  }
+
+  function prevStep() {
+    if (currentStep > 0) {
+      currentStep--;
+      renderStep(steps[currentStep]);
+    }
+  }
+
+  function resetSteps() {
+    currentStep = -1;
+    document.getElementById('pb-stack').innerHTML = '<div class="queue-item empty">empty</div>';
+    document.getElementById('pb-micro').innerHTML = '<div class="queue-item empty">empty</div>';
+    document.getElementById('pb-macro').innerHTML = '<div class="queue-item empty">empty</div>';
+    document.getElementById('pb-output').innerHTML = '';
+    document.getElementById('playback-desc').innerHTML = 'Press <strong>next →</strong> to walk through execution step by step.';
+    document.getElementById('step-indicator').textContent = `step 0 / ${steps.length}`;
+  }
+</script>
+</body>
+</html>
